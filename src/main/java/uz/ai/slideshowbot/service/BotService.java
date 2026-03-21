@@ -102,6 +102,14 @@ public class BotService {
                         case "BALANCE_PAY" -> balanceService.handleBuy(bot, user, chatId, null);
 
                         case "SEND_CHECK" -> {
+                            try {
+                                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup removeBtn =
+                                        new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup();
+                                removeBtn.setChatId(chatId.toString());
+                                removeBtn.setMessageId(callbackMsg.getMessageId());
+                                removeBtn.setReplyMarkup(new InlineKeyboardMarkup(List.of()));
+                                bot.execute(removeBtn);
+                            } catch (Exception ignored) {}
                             balanceService.handleCheckFlow(bot, user, chatId);
                             return true;
                         }
@@ -471,6 +479,16 @@ public class BotService {
                                 "🇺🇿 Tilni tanlang\n🇷🇺 Выберите язык\n🇬🇧 Choose language:",
                                 languageKeyboard(),
                                 true);
+                        return true;
+                    }
+
+                    case "📄 Word <--> PDF" -> {
+                        String msg = switch (user1.getLanguage()) {
+                            case "RU" -> "🚧 Этот раздел находится в разработке. Скоро будет доступен!";
+                            case "ENG" -> "🚧 This section is under development. Coming soon!";
+                            default -> "🚧 Bu bo'lim hali ishlab chiqilmoqda. Tez orada ishga tushadi!";
+                        };
+                        sendMessage(bot, chatId1, msg, mainMenuKeyboard(user1.getLanguage()), false);
                         return true;
                     }
 

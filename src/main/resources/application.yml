@@ -12,6 +12,7 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         format_sql: true
@@ -21,14 +22,16 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
 
+server:
+  port: 8082
+
 telegram:
   bot:
-    token: 8122095609:AAHVw2Vj4q1_9MJwMH6ngMncuK_Zga3TH-Y
+    token: 8122095609:AAGxVLSwHVlD5HO5B07_p7kff3gI1Cm5uto
     username: AI_Slide_Assistant_Bot
 
 openai:
   api-key: "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"
-
 
 
 logging:

@@ -4,6 +4,7 @@ import com.itextpdf.text.Document;
 import com.itextpdf.text.Image;
 import com.itextpdf.text.PageSize;
 import com.itextpdf.text.pdf.PdfWriter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
@@ -18,26 +19,29 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import uz.ai.slideshowbot.bot.SlideBot;
+import uz.ai.slideshowbot.entity.FileEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
+import uz.ai.slideshowbot.repository.FileRepository;
 import uz.ai.slideshowbot.repository.UserRepository;
-import java.io.File;
-import java.io.FileOutputStream;
+
+import java.io.*;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.*;
 
 @Service
 public class PdfService {
+
     private final UserRepository userRepository;
-    private final Map<Long, List<File>> tempUserImages = new HashMap<>();
-    private final Map<Long, Boolean> waitingForConfirmation = new HashMap<>();
-    private static final String SAVE_DIR = "C:/Users/User/Desktop/saqlash/saqlash";
+
+    @Autowired
+    private FileRepository fileRepository;
+
+    private final Map<Long, List<byte[]>> tempUserImages = new HashMap<>();
 
     public PdfService(UserRepository userRepository) {
         this.userRepository = userRepository;
-        File dir = new File(SAVE_DIR);
-        if (!dir.exists()) dir.mkdirs();
     }
 
     public boolean handlePdfFlow(Update update, SlideBot bot, UserEntity user) throws TelegramApiException {
@@ -48,16 +52,17 @@ public class PdfService {
 
         if (msg.hasText()) {
             String text = msg.getText();
+
             if (text.equals("📄 PDF yaratish") || text.equals("📄 Создать PDF") || text.equals("📄 Create PDF")) {
                 tempUserImages.remove(chatId);
-                waitingForConfirmation.put(chatId, false);
                 sendMessage(bot, chatId,
                         getText("SEND_IMAGES", user.getLanguage()),
                         pdfControlKeyboard(user.getLanguage()));
                 return true;
             }
+
             if (text.equals("✅ Tasdiqlash") || text.equals("✅ Подтвердить") || text.equals("✅ Confirm")) {
-                List<File> images = tempUserImages.get(chatId);
+                List<byte[]> images = tempUserImages.get(chatId);
                 if (images == null || images.isEmpty()) {
                     sendMessage(bot, chatId,
                             switch (user.getLanguage()) {
@@ -68,15 +73,22 @@ public class PdfService {
                             pdfControlKeyboard(user.getLanguage()));
                     return true;
                 }
-                File pdf = createPdf(images, chatId);
+
+                byte[] pdfBytes = createPdfFromBytes(images);
                 tempUserImages.remove(chatId);
-                waitingForConfirmation.remove(chatId);
-                showProgressAndSendPdf(bot, chatId, pdf, user);
+
+                FileEntity fileEntity = new FileEntity();
+                fileEntity.setChatId(chatId);
+                fileEntity.setFileName("user_" + chatId + ".pdf");
+                fileEntity.setFileType("PDF");
+                fileEntity.setData(pdfBytes);
+                fileRepository.save(fileEntity);
+
+                showProgressAndSendPdf(bot, chatId, pdfBytes, user);
                 return true;
             }
+
             if (text.equals("◀️ Orqaga") || text.equals("◀️ Назад") || text.equals("◀️ Back")) {
-                clearTempFiles(chatId);
-                waitingForConfirmation.remove(chatId);
                 tempUserImages.remove(chatId);
                 sendMessage(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
                 return true;
@@ -84,15 +96,18 @@ public class PdfService {
         }
 
         if (msg.hasPhoto()) {
-            waitingForConfirmation.put(chatId, true);
             try {
                 String fileId = msg.getPhoto().get(msg.getPhoto().size() - 1).getFileId();
+
                 org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(new GetFile(fileId));
-                File downloaded = bot.downloadFile(tgFile.getFilePath());
-                File localCopy = new File(SAVE_DIR, "chat_" + chatId + "_" + System.currentTimeMillis() + ".jpg");
-                Files.copy(downloaded.toPath(), localCopy.toPath());
-                downloaded.delete();
-                tempUserImages.computeIfAbsent(chatId, k -> new ArrayList<>()).add(localCopy);
+                String fileUrl = tgFile.getFileUrl(bot.getBotToken());
+
+                byte[] imageBytes;
+                try (InputStream in = new URL(fileUrl).openStream()) {
+                    imageBytes = in.readAllBytes();
+                }
+
+                tempUserImages.computeIfAbsent(chatId, k -> new ArrayList<>()).add(imageBytes);
 
                 SendMessage replyMsg = new SendMessage(chatId.toString(), getText("IMAGE_SAVED", user.getLanguage()));
                 replyMsg.setReplyToMessageId(msg.getMessageId());
@@ -119,24 +134,21 @@ public class PdfService {
             SendMessage warnMsg = new SendMessage(chatId.toString(), warnText);
             warnMsg.setReplyToMessageId(msg.getMessageId());
             warnMsg.setReplyMarkup(pdfControlKeyboard(user.getLanguage()));
-            try {
-                bot.execute(warnMsg);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            try { bot.execute(warnMsg); } catch (Exception ignored) {}
             return true;
         }
+
         return false;
     }
 
-    private File createPdf(List<File> images, Long chatId) {
-        File output = new File(SAVE_DIR, "user_" + chatId + ".pdf");
-        try (FileOutputStream fos = new FileOutputStream(output)) {
+    private byte[] createPdfFromBytes(List<byte[]> images) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
             Document document = new Document(PageSize.A4);
-            PdfWriter.getInstance(document, fos);
+            PdfWriter.getInstance(document, baos);
             document.open();
-            for (File imgFile : images) {
-                Image img = Image.getInstance(imgFile.getAbsolutePath());
+            for (byte[] imgBytes : images) {
+                Image img = Image.getInstance(imgBytes);
                 img.scaleToFit(PageSize.A4.getWidth(), PageSize.A4.getHeight());
                 img.setAlignment(Image.ALIGN_CENTER);
                 document.add(img);
@@ -146,16 +158,16 @@ public class PdfService {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return output;
+        return baos.toByteArray();
     }
 
-    private void showProgressAndSendPdf(SlideBot bot, Long chatId, File pdf, UserEntity user) {
+    private void showProgressAndSendPdf(SlideBot bot, Long chatId, byte[] pdfBytes, UserEntity user) {
         try {
             SendMessage emojiMsg = new SendMessage(chatId.toString(), "📝");
             bot.execute(emojiMsg);
 
             SendMessage progressMsg = new SendMessage(chatId.toString(),
-                    getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜");
+                    getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜");
             Message sentProgress = bot.execute(progressMsg);
 
             int totalSteps = 4;
@@ -179,28 +191,27 @@ public class PdfService {
             String fullShareUrl = "https://t.me/share/url?url=" + encodedUrl;
 
             InlineKeyboardButton shareBtn = new InlineKeyboardButton();
-            shareBtn.setText(
-                    switch (user.getLanguage()) {
-                        case "RU" -> "📤 Поделиться";
-                        case "ENG" -> "📤 Share";
-                        default -> "📤 Ulashish";
-                    }
-            );
+            shareBtn.setText(switch (user.getLanguage()) {
+                case "RU" -> "📤 Поделиться";
+                case "ENG" -> "📤 Share";
+                default -> "📤 Ulashish";
+            });
             shareBtn.setUrl(fullShareUrl);
+
             InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
             markup.setKeyboard(List.of(List.of(shareBtn)));
 
+            String pdfName = "document_" + chatId + ".pdf";
+
             SendDocument sendDoc = new SendDocument();
             sendDoc.setChatId(chatId.toString());
-            sendDoc.setDocument(new InputFile(pdf));
+            sendDoc.setDocument(new InputFile(new ByteArrayInputStream(pdfBytes), pdfName));
             sendDoc.setCaption(getText("PDF_READY", user.getLanguage()));
             sendDoc.setReplyMarkup(markup);
             bot.execute(sendDoc);
 
-            clearTempFiles(chatId);
-            if (pdf.exists()) pdf.delete();
-
             sendMessage(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -216,36 +227,15 @@ public class PdfService {
         }
     }
 
-    private void clearTempFiles(Long chatId) {
-        File folder = new File(SAVE_DIR);
-        File[] files = folder.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (f.exists() && f.getName().contains("chat_" + chatId)) {
-                    f.delete();
-                }
-            }
-        }
-    }
-
     private ReplyKeyboard pdfControlKeyboard(String lang) {
         ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
         List<KeyboardRow> rows = new ArrayList<>();
         KeyboardRow r1 = new KeyboardRow();
         KeyboardRow r2 = new KeyboardRow();
         switch (lang) {
-            case "RU" -> {
-                r1.add("✅ Подтвердить");
-                r2.add("◀️ Назад");
-            }
-            case "ENG" -> {
-                r1.add("✅ Confirm");
-                r2.add("◀️ Back");
-            }
-            default -> {
-                r1.add("✅ Tasdiqlash");
-                r2.add("◀️ Orqaga");
-            }
+            case "RU" -> { r1.add("✅ Подтвердить"); r2.add("◀️ Назад"); }
+            case "ENG" -> { r1.add("✅ Confirm"); r2.add("◀️ Back"); }
+            default -> { r1.add("✅ Tasdiqlash"); r2.add("◀️ Orqaga"); }
         }
         rows.add(r1);
         rows.add(r2);
@@ -261,33 +251,22 @@ public class PdfService {
         KeyboardRow r3 = new KeyboardRow();
         switch (lang) {
             case "RU" -> {
-                r1.add("📄 Создать PDF");
-                r1.add("📦 Архивировать файлы (Zip)");
-                r2.add("🎞️ Создать презентацию");
-                r2.add("🌐 Язык");
-                r3.add("📄 Word <--> PDF");
-                r3.add("💰 Баланс");
+                r1.add("📄 Создать PDF"); r1.add("📦 Архивировать файлы (Zip)");
+                r2.add("🎞️ Создать презентацию"); r2.add("🌐 Язык");
+                r3.add("📄 Word <--> PDF"); r3.add("💰 Баланс");
             }
             case "ENG" -> {
-                r1.add("📄 Create PDF");
-                r1.add("📦 Zip Files");
-                r2.add("🎞️ Create Presentation");
-                r2.add("🌐 Language Settings");
-                r3.add("📄 Word <--> PDF");
-                r3.add("💰 Balance");
+                r1.add("📄 Create PDF"); r1.add("📦 Zip Files");
+                r2.add("🎞️ Create Presentation"); r2.add("🌐 Language Settings");
+                r3.add("📄 Word <--> PDF"); r3.add("💰 Balance");
             }
             default -> {
-                r1.add("📄 PDF yaratish");
-                r1.add("📦 Fayllarni Zip qilish");
-                r2.add("🎞️ Taqdimot yaratish");
-                r2.add("🌐 Til Sozlamalari");
-                r3.add("📄 Word <--> PDF");
-                r3.add("💰 Balans");
+                r1.add("📄 PDF yaratish"); r1.add("📦 Fayllarni Zip qilish");
+                r2.add("🎞️ Taqdimot yaratish"); r2.add("🌐 Til Sozlamalari");
+                r3.add("📄 Word <--> PDF"); r3.add("💰 Balans");
             }
         }
-        rows.add(r1);
-        rows.add(r2);
-        rows.add(r3);
+        rows.add(r1); rows.add(r2); rows.add(r3);
         ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup(rows);
         markup.setResizeKeyboard(true);
         return markup;
@@ -316,9 +295,9 @@ public class PdfService {
                 default -> "⏳ Iltimos, kuting...";
             };
             case "PDF_READY" -> switch (lang) {
-                case "RU" -> "✅ Ваш PDF готов!\nПоделитесь нашим ботом со своими друзьями тоже.";
-                case "ENG" -> "✅ Your PDF is ready!\nShare our bot with your friends as well.";
-                default -> "✅ PDF faylingiz tayyor!\nBotimizni do`stlaringizga ham ulashing.";
+                case "RU" -> "✅ Ваш PDF готов!\nПоделитесь ботом с друзьями тоже.";
+                case "ENG" -> "✅ Your PDF is ready!\nShare our bot with friends as well.";
+                default -> "✅ PDF faylingiz tayyor!\nBotimizni do'stlaringizga ham ulashing.";
             };
             case "MAIN_MENU" -> switch (lang) {
                 case "RU" -> "🏠 Главное меню";

@@ -10,18 +10,23 @@ import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import uz.ai.slideshowbot.bot.SlideBot;
+import uz.ai.slideshowbot.entity.FileEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
+import uz.ai.slideshowbot.repository.FileRepository;
 import uz.ai.slideshowbot.repository.UserRepository;
 
-import java.io.File;
-import java.nio.file.Files;
+import java.io.InputStream;
+import java.net.URL;
 import java.util.List;
 
 @Service
 public class BalanceService {
-    @Autowired
-    private  UserRepository userRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private FileRepository fileRepository; // ✅ yangi
 
     public void showBalance(SlideBot bot, UserEntity user, Long chatId, Integer lastMessageId) {
         if (user.getBalance() == null) user.setBalance(4000);
@@ -53,21 +58,21 @@ public class BalanceService {
         if (lastMessageId != null) {
             try {
                 bot.execute(new DeleteMessage(chatId.toString(), lastMessageId));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         Integer newMessageId = sendMessage(bot, chatId, text, markup);
-
         user.setLastBalanceMessageId(newMessageId);
         userRepository.save(user);
     }
-
 
     public void handleBuy(SlideBot bot, UserEntity user, Long chatId, Integer lastBalanceMessageId) {
         if (lastBalanceMessageId != null) {
             try {
                 bot.execute(new DeleteMessage(chatId.toString(), lastBalanceMessageId));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         String text1 = switch (user.getLanguage()) {
@@ -76,7 +81,7 @@ public class BalanceService {
                     6-10 страниц - 4000 сум
                     11-15 страниц - 5000 сум
                     16-20 страниц - 6000 сум
-
+                    
                     📘Самостоятельная работа цены:
                     до 6-10 страниц - 4000 сум
                     до 11-15 страниц - 5000 сум
@@ -87,7 +92,7 @@ public class BalanceService {
                     6-10 pages - 4000 UZS
                     11-15 pages - 5000 UZS
                     16-20 pages - 6000 UZS
-
+                    
                     📘Independent Work prices:
                     up to 6-10 pages - 4000 UZS
                     up to 6-15 pages - 5000 UZS
@@ -98,7 +103,7 @@ public class BalanceService {
                      6 sahifadan, 10 sahifagacha - 4000 so'm
                     11 sahifadan, 15 sahifagacha - 5000 so'm
                     16 sahifadan, 20 sahifagacha - 6000 so'm
-
+                    
                     📘Mustaqil ish narxlari:
                     6-10 sahifagacha - 4000 so'm
                     11-15 sahifagacha - 5000 so'm
@@ -113,45 +118,46 @@ public class BalanceService {
                     - 2 000 сум
                     - 3 000 сум
                     - 5 000 сум
-                    * 10 000 сум - +2000 сум бонус🎁
-                    * 20 000 сум - +5000 сум бонус🎁
-                    * 50 000 сум - +15000 сум бонус🎁
-
-                    Оплатите на следующий номер карты и сделайте скриншот чека:
-                    (Нажмите на номер карты, чтобы КОПИРОВАТЬ).
+                    * Оплатите 10 000 сум → получите +2 000 сум бонус🎁
+                    * Оплатите 20 000 сум → получите +5 000 сум бонус🎁
+                    * Оплатите 50 000 сум → получите +15 000 сум бонус🎁
+                    
+                    Переведите оплату на карту ниже и сделайте скриншот чека:
+                    (Нажмите на номер карты, чтобы скопировать)
+                    
                     💳 9860040102530439 (HUMO)
-                    👤 ДЖАЛИЛОВ ОЗОДБЕК
+                    👤 JALILOV OZODBEK
                     
-                    ❕Если у вас возникли проблемы с оплатой на эту карту, оплатите на одну из следующих карт:
+                    ❕ Если возникли проблемы с оплатой на эту карту, воспользуйтесь одной из следующих:
                     💳 9860350146548903 (HUMO)
-                    👤 ДЖАЛИЛОВ ОЗОДБЕК
-                    
+                    👤 JALILOV OZODBEK
                     💳 4916990311256090 (VISA)
-                    👤 ДЖАЛИЛОВ ОЗОДБЕК
-                    🧾 После оплаты отправьте /chek или нажмите кнопку👇
+                    👤 JALILOV OZODBEK
+                    
+                    🧾 После оплаты отправьте команду /chek или нажмите кнопку ниже👇
                     """;
             case "ENG" -> """
                     Please pay only the following amounts:
-                    - 2 000 UZS
-                    - 3 000 UZS
-                    - 5 000 UZS
-                    * 10 000 UZS - +2000 UZS bonus🎁
-                    * 20 000 UZS - +5000 UZS bonus🎁
-                    * 50 000 UZS - +15000 UZS bonus🎁
-
-                    Pay to the following card number and take a screenshot of the receipt:
-                    (Click on the card number to COPY).
+                    - 2,000 UZS
+                    - 3,000 UZS
+                    - 5,000 UZS
+                    * Pay 10,000 UZS → get +2,000 UZS bonus🎁
+                    * Pay 20,000 UZS → get +5,000 UZS bonus🎁
+                    * Pay 50,000 UZS → get +15,000 UZS bonus🎁
+                    
+                    Send payment to the card below and take a screenshot of the receipt:
+                    (Tap on the card number to copy it)
+                    
                     💳 9860040102530439 (HUMO)
                     👤 JALILOV OZODBEK
                     
-                    ❕If you have problems paying to this card, pay to one of the following cards:
+                    ❕ If you have trouble paying to this card, use one of the following:
                     💳 9860350146548903 (HUMO)
                     👤 JALILOV OZODBEK
-                    
                     💳 4916990311256090 (VISA)
                     👤 JALILOV OZODBEK
-
-                    🧾 After payment, send /chek or press the button👇
+                    
+                    🧾 After payment, send /chek command or press the button below👇
                     """;
             default -> """
                     Iltimos faqat ushbu summalar miqdorida to'lov qiling:
@@ -161,20 +167,20 @@ public class BalanceService {
                     * 10 000 so'm to'lov qilsangiz, +2000 so'm bonus🎁
                     * 20 000 so'm to'lov qilsangiz, +5000 so'm bonus🎁
                     * 50 000 so'm to'lov qilsangiz, +15000 so'm bonus🎁
-
+                    
                     Quyidagi karta raqamiga to'lov qiling va chekni skrenshot qilib oling:
                     (COPY qilish uchun karta raqam ustiga bosing).
                     💳 9860040102530439  (HUMO)
-                    👤 JALILOV OZODBEK   
+                    👤 JALILOV OZODBEK
                     
                     ❕ushbu kartaga to'lov qilishda muammo bo'lsa, quyidagi kartalardan biriga to'lov qiling:
                     💳 9860350146548903  (HUMO)
-                    👤 JALILOV OZODBEK   
+                    👤 JALILOV OZODBEK
                     
                     💳 4916990311256090  (VISA)
                     👤 JALILOV OZODBEK
                     
-
+                    
                     🧾 To'lov qilganingizdan so'ng /chek buyrug'ini yuboring yoki quyidagi tugmani bosing👇
                     """;
         };
@@ -208,32 +214,38 @@ public class BalanceService {
         userRepository.save(user);
 
         try {
+            String fileId;
+            String fileName;
+
             if (message.hasPhoto()) {
                 PhotoSize photo = message.getPhoto().get(message.getPhoto().size() - 1);
-                GetFile getFileMethod = new GetFile(photo.getFileId());
-                org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(getFileMethod);
-
-                File tempDir = new File("C:\\Users\\User\\Desktop\\saqlash\\saqlash");
-                if (!tempDir.exists()) tempDir.mkdirs();
-
-                File outFile = new File(tempDir, "check_" + user.getChatId() + "_" + System.currentTimeMillis() + ".jpg");
-                bot.downloadFile(tgFile, outFile);
-
-                user.setLastCheckFile(outFile.getAbsolutePath());
-                userRepository.save(user);
+                fileId = photo.getFileId();
+                fileName = "check_" + user.getChatId() + ".jpg";
             } else if (message.hasDocument()) {
-                GetFile getFileMethod = new GetFile(message.getDocument().getFileId());
-                org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(getFileMethod);
-
-                File tempDir = new File("C:\\Users\\User\\Desktop\\saqlash\\saqlash");
-                if (!tempDir.exists()) tempDir.mkdirs();
-
-                File outFile = new File(tempDir, message.getDocument().getFileName());
-                bot.downloadFile(tgFile, outFile);
-
-                user.setLastCheckFile(outFile.getAbsolutePath());
-                userRepository.save(user);
+                fileId = message.getDocument().getFileId();
+                fileName = message.getDocument().getFileName();
+            } else {
+                return;
             }
+
+            GetFile getFileMethod = new GetFile(fileId);
+            org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(getFileMethod);
+            String fileUrl = tgFile.getFileUrl(bot.getBotToken());
+
+            byte[] fileBytes;
+            try (InputStream in = new URL(fileUrl).openStream()) {
+                fileBytes = in.readAllBytes();
+            }
+
+            FileEntity fileEntity = new FileEntity();
+            fileEntity.setChatId(user.getChatId());
+            fileEntity.setFileName(fileName);
+            fileEntity.setFileType("CHECK");
+            fileEntity.setData(fileBytes);
+            FileEntity saved = fileRepository.save(fileEntity);
+
+            user.setCheckFileId(saved.getId());
+            userRepository.save(user);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -241,15 +253,14 @@ public class BalanceService {
     }
 
     public void deleteCheckFile(UserEntity user) {
-        String filePath = user.getLastCheckFile();
-        if (filePath != null) {
+        Long fileId = user.getCheckFileId();
+        if (fileId != null) {
             try {
-                File file = new File(filePath);
-                if (file.exists()) Files.delete(file.toPath());
+                fileRepository.deleteById(fileId);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            user.setLastCheckFile(null);
+            user.setCheckFileId(null);
             userRepository.save(user);
         }
     }
@@ -266,6 +277,3 @@ public class BalanceService {
         }
     }
 }
-
-
-

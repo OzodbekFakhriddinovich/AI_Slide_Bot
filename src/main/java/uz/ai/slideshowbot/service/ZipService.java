@@ -15,12 +15,12 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import uz.ai.slideshowbot.bot.SlideBot;
+import uz.ai.slideshowbot.entity.FileEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
+import uz.ai.slideshowbot.repository.FileRepository;
 import uz.ai.slideshowbot.repository.UserRepository;
-import org.telegram.telegrambots.meta.api.objects.InputFile;
 
 import java.io.*;
-import java.io.File;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -35,14 +35,8 @@ public class ZipService {
     @Autowired
     private UserRepository userRepository;
 
-    private final Map<Long, List<File>> userFiles = new HashMap<>();
-
-    private static final String SAVE_DIR = "C:\\Users\\User\\Desktop\\saqlash\\saqlash";
-
-    public ZipService() {
-        File dir = new File(SAVE_DIR);
-        if (!dir.exists()) dir.mkdirs();
-    }
+    @Autowired
+    private FileRepository fileRepository;
 
     public void handleFile(Update update, SlideBot bot, UserEntity user) {
         if (update == null || !update.hasMessage() || user == null) return;
@@ -74,14 +68,17 @@ public class ZipService {
                 if (tgFile == null) return;
 
                 String fileUrl = tgFile.getFileUrl(bot.getBotToken());
-                File downloaded = new File(SAVE_DIR, "chat_" + chatId + "_" + System.currentTimeMillis() + "_" + fileName);
-
-                try (InputStream in = new URL(fileUrl).openStream();
-                     FileOutputStream out = new FileOutputStream(downloaded)) {
-                    in.transferTo(out);
+                byte[] fileBytes;
+                try (InputStream in = new URL(fileUrl).openStream()) {
+                    fileBytes = in.readAllBytes();
                 }
 
-                userFiles.computeIfAbsent(chatId, k -> new ArrayList<>()).add(downloaded);
+                FileEntity fileEntity = new FileEntity();
+                fileEntity.setChatId(chatId);
+                fileEntity.setFileName(fileName);
+                fileEntity.setFileType("ZIP");
+                fileEntity.setData(fileBytes);
+                fileRepository.save(fileEntity);
 
                 sendReply(bot, chatId, msg.getMessageId(),
                         getFileSavedText(user.getLanguage()),
@@ -100,8 +97,12 @@ public class ZipService {
         Long chatId = getChatId(update);
         if (chatId == null || user == null) return;
 
-        List<File> files = userFiles.get(chatId);
-        if (files == null || files.isEmpty()) {
+        List<FileEntity> files = fileRepository.findAllByChatId(chatId)
+                .stream()
+                .filter(f -> "ZIP".equals(f.getFileType()))
+                .toList();
+
+        if (files.isEmpty()) {
             send(bot, chatId, getNoFilesText(user), zipBackKeyboard(user.getLanguage()));
             return;
         }
@@ -112,7 +113,7 @@ public class ZipService {
                 bot.execute(emojiMsg);
 
                 SendMessage progressMsg = new SendMessage(chatId.toString(),
-                        getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜");
+                        getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜");
                 Message sentProgress = bot.execute(progressMsg);
 
                 int totalSteps = 4;
@@ -129,7 +130,7 @@ public class ZipService {
                     Thread.sleep(300);
                 }
 
-                File zipFile = createZip(chatId, files);
+                byte[] zipBytes = createZipFromEntities(files);
 
                 bot.execute(new DeleteMessage(chatId.toString(), sentProgress.getMessageId()));
 
@@ -146,15 +147,15 @@ public class ZipService {
 
                 InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(List.of(shareBtn)));
 
+                String zipName = "archive_" + chatId + "_" + System.currentTimeMillis() + ".zip";
                 SendDocument sendDoc = new SendDocument();
                 sendDoc.setChatId(chatId.toString());
-                sendDoc.setDocument(new InputFile(zipFile, zipFile.getName()));
+                sendDoc.setDocument(new InputFile(new ByteArrayInputStream(zipBytes), zipName));
                 sendDoc.setCaption(getText("ZIP_READY", user.getLanguage()));
                 sendDoc.setReplyMarkup(markup);
                 bot.execute(sendDoc);
 
                 clearUserZipData(chatId);
-                if (zipFile.exists()) zipFile.delete();
 
                 send(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
 
@@ -168,37 +169,22 @@ public class ZipService {
         });
     }
 
-    private File createZip(Long chatId, List<File> files) throws IOException {
-        File zipFile = new File(SAVE_DIR, "chat_" + chatId + "_archive_" + System.currentTimeMillis() + ".zip");
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))) {
-            for (File f : files) {
-                if (f == null || !f.exists()) continue;
-                zos.putNextEntry(new ZipEntry(f.getName()));
-                try (FileInputStream fis = new FileInputStream(f)) {
-                    fis.transferTo(zos);
-                }
+    private byte[] createZipFromEntities(List<FileEntity> files) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            for (FileEntity file : files) {
+                if (file.getData() == null) continue;
+                zos.putNextEntry(new ZipEntry(file.getFileName()));
+                zos.write(file.getData());
                 zos.closeEntry();
             }
         }
-        return zipFile;
+        return baos.toByteArray();
     }
 
     public void clearUserZipData(Long chatId) {
         if (chatId == null) return;
-        clearTempFiles(chatId);
-        userFiles.remove(chatId);
-    }
-
-    private void clearTempFiles(Long chatId) {
-        File folder = new File(SAVE_DIR);
-        File[] files = folder.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (f.getName().contains("chat_" + chatId + "_") && f.exists()) {
-                    f.delete();
-                }
-            }
-        }
+        fileRepository.deleteByChatId(chatId);
     }
 
     private void sendReply(SlideBot bot, Long chatId, Integer messageId, String text, ReplyKeyboard keyboard) {
@@ -323,9 +309,9 @@ public class ZipService {
                 default -> "⏳ Iltimos, kuting...";
             };
             case "ZIP_READY" -> switch (lang) {
-                case "RU" -> "📦 ZIP готов!\nПоделитесь нашим ботом со своими друзьями тоже.";
-                case "ENG" -> "📦 ZIP is ready!\nShare our bot with your friends as well.";
-                default -> "📦 ZIP tayyor!\nBotimizni do`stlaringizga ham ulashing.";
+                case "RU" -> "📦 ZIP готов!\nПоделитесь ботом с друзьями.";
+                case "ENG" -> "📦 ZIP is ready!\nShare our bot with friends.";
+                default -> "📦 ZIP tayyor!\nBotimizni do'stlaringizga ulashing.";
             };
             case "MAIN_MENU" -> switch (lang) {
                 case "RU" -> "🏠 Главное меню";

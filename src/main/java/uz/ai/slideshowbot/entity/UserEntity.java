@@ -40,8 +40,8 @@ public class UserEntity {
     private Boolean inZipFlow = false;
     private Boolean inCheckFlow;
 
-    @Column(name = "last_check_file")
-    private String lastCheckFile;
+    @Column(name = "check_file_id")
+    private Long checkFileId;
 
     @Column(name = "last_balance_message_id")
     private Integer lastBalanceMessageId;
@@ -51,13 +51,9 @@ public class UserEntity {
     private String slideCount;
 
     private Integer lastSlideCountMessageId;
-
     private Integer lastTemplateMessageId;
-
     private Integer lastSelectedTemplateMessageId;
-
     private Integer lastSelectedTemplateNumber;
-
     private String template;
 
     private String referralCode;
@@ -66,216 +62,88 @@ public class UserEntity {
     @Column(name = "in_pdf_flow")
     private Boolean inPdfFlow = false;
 
+    private String subjectName;
+
+
+
     public Boolean getInPdfFlow() { return inPdfFlow; }
     public void setInPdfFlow(Boolean inPdfFlow) { this.inPdfFlow = inPdfFlow; }
 
-    public String getReferralCode() {
-        return referralCode;
-    }
-    public void setReferralCode(String referralCode) {
-        this.referralCode = referralCode;
-    }
-    public Long getReferrerId() {
-        return referrerId;
-    }
-    public void setReferrerId(Long referrerId) {
-        this.referrerId = referrerId;
-    }
+    public String getReferralCode() { return referralCode; }
+    public void setReferralCode(String referralCode) { this.referralCode = referralCode; }
 
+    public Long getReferrerId() { return referrerId; }
+    public void setReferrerId(Long referrerId) { this.referrerId = referrerId; }
 
-    private String subjectName;
+    public String getSubjectName() { return subjectName; }
+    public void setSubjectName(String subjectName) { this.subjectName = subjectName; }
 
-    public String getSubjectName() {
-        return subjectName;
-    }
+    public String getTemplate() { return template; }
+    public void setTemplate(String template) { this.template = template; }
 
-    public void setSubjectName(String subjectName) {
-        this.subjectName = subjectName;
-    }
+    public Integer getLastSelectedTemplateNumber() { return lastSelectedTemplateNumber; }
+    public void setLastSelectedTemplateNumber(Integer n) { this.lastSelectedTemplateNumber = n; }
 
+    public Integer getLastTemplateMessageId() { return lastTemplateMessageId; }
+    public void setLastTemplateMessageId(Integer id) { this.lastTemplateMessageId = id; }
 
-    public String getTemplate() {
-        return template;
-    }
-
-    public void setTemplate(String template) {
-        this.template = template;
-    }
-
-    public Integer getLastSelectedTemplateNumber() {
-        return lastSelectedTemplateNumber;
-    }
-
-    public void setLastSelectedTemplateNumber(Integer lastSelectedTemplateNumber) {
-        this.lastSelectedTemplateNumber = lastSelectedTemplateNumber;
-    }
-
-
-    public Integer getLastTemplateMessageId() {
-        return lastTemplateMessageId;
-    }
-
-    public void setLastTemplateMessageId(Integer lastTemplateMessageId) {
-        this.lastTemplateMessageId = lastTemplateMessageId;
-    }
-
-    public Integer getLastSelectedTemplateMessageId() {
-        return lastSelectedTemplateMessageId;
-    }
-
-    public void setLastSelectedTemplateMessageId(Integer lastSelectedTemplateMessageId) {
-        this.lastSelectedTemplateMessageId = lastSelectedTemplateMessageId;
-    }
+    public Integer getLastSelectedTemplateMessageId() { return lastSelectedTemplateMessageId; }
+    public void setLastSelectedTemplateMessageId(Integer id) { this.lastSelectedTemplateMessageId = id; }
 
     public Integer getLastSlideCountMessageId() { return lastSlideCountMessageId; }
     public void setLastSlideCountMessageId(Integer id) { this.lastSlideCountMessageId = id; }
 
+    public String getSlideCount() { return slideCount; }
+    public void setSlideCount(String slideCount) { this.slideCount = slideCount; }
 
-    public String getSlideCount() {
-        return slideCount;
-    }
+    public String getTopic() { return topic; }
+    public void setTopic(String topic) { this.topic = topic; }
 
-    public void setSlideCount(String slideCount) {
-        this.slideCount = slideCount;
-    }
+    public String getUserInfo() { return userInfo; }
+    public void setUserInfo(String userInfo) { this.userInfo = userInfo; }
 
+    public UserState getState() { return state; }
+    public void setState(UserState state) { this.state = state; }
 
-    public String getTopic() {
-        return topic;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setTopic(String topic) {
-        this.topic = topic;
-    }
+    public Long getChatId() { return chatId; }
+    public void setChatId(Long chatId) { this.chatId = chatId; }
 
-    public String getUserInfo() {
-        return userInfo;
-    }
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
 
-    public void setUserInfo(String userInfo) {
-        this.userInfo = userInfo;
-    }
+    public Integer getBalance() { return balance; }
+    public void setBalance(Integer balance) { this.balance = balance; }
 
-    public UserState getState() {
-        return state;
-    }
+    public String getPhotoFileId() { return photoFileId; }
+    public void setPhotoFileId(String photoFileId) { this.photoFileId = photoFileId; }
 
-    public void setState(UserState state) {
-        this.state = state;
-    }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
 
+    public Integer getLastBotMessageId() { return lastBotMessageId; }
+    public void setLastBotMessageId(Integer id) { this.lastBotMessageId = id; }
 
-    public Long getId() {
-        return id;
-    }
+    public Integer getLastLanguageMessageId() { return lastLanguageMessageId; }
+    public void setLastLanguageMessageId(Integer id) { this.lastLanguageMessageId = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public List<String> getFileList() { return fileList; }
+    public void setFileList(List<String> fileList) { this.fileList = fileList; }
 
-    public Long getChatId() {
-        return chatId;
-    }
+    public Boolean getInZipFlow() { return inZipFlow; }
+    public void setInZipFlow(Boolean inZipFlow) { this.inZipFlow = inZipFlow; }
 
-    public void setChatId(Long chatId) {
-        this.chatId = chatId;
-    }
+    public Boolean getInCheckFlow() { return inCheckFlow; }
+    public void setInCheckFlow(Boolean inCheckFlow) { this.inCheckFlow = inCheckFlow; }
 
+    public Long getCheckFileId() { return checkFileId; }
+    public void setCheckFileId(Long checkFileId) { this.checkFileId = checkFileId; }
 
-    public String getLanguage() {
-        return language;
-    }
-
-    public void setLanguage(String language) {
-        this.language = language;
-    }
-
-    public Integer getBalance() {
-        return balance;
-    }
-
-    public void setBalance(Integer balance) {
-        this.balance = balance;
-    }
-
-    public String getPhotoFileId() {
-        return photoFileId;
-    }
-
-    public void setPhotoFileId(String photoFileId) {
-        this.photoFileId = photoFileId;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getFirstName() {
-        return firstName;
-    }
-
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
-
-    public Integer getLastBotMessageId() {
-        return lastBotMessageId;
-    }
-
-    public void setLastBotMessageId(Integer lastBotMessageId) {
-        this.lastBotMessageId = lastBotMessageId;
-    }
-
-    public Integer getLastLanguageMessageId() {
-        return lastLanguageMessageId;
-    }
-
-    public void setLastLanguageMessageId(Integer lastLanguageMessageId) {
-        this.lastLanguageMessageId = lastLanguageMessageId;
-    }
-
-    public List<String> getFileList() {
-        return fileList;
-    }
-
-    public void setFileList(List<String> fileList) {
-        this.fileList = fileList;
-    }
-
-    public Boolean getInZipFlow() {
-        return inZipFlow;
-    }
-
-    public void setInZipFlow(Boolean inZipFlow) {
-        this.inZipFlow = inZipFlow;
-    }
-
-    public Boolean getInCheckFlow() {
-        return inCheckFlow;
-    }
-
-    public void setInCheckFlow(Boolean inCheckFlow) {
-        this.inCheckFlow = inCheckFlow;
-    }
-
-    public String getLastCheckFile() {
-        return lastCheckFile;
-    }
-
-    public void setLastCheckFile(String lastCheckFile) {
-        this.lastCheckFile = lastCheckFile;
-    }
-
-    public Integer getLastBalanceMessageId() {
-        return lastBalanceMessageId;
-    }
-
-    public void setLastBalanceMessageId(Integer lastBalanceMessageId) {
-        this.lastBalanceMessageId = lastBalanceMessageId;
-    }
+    public Integer getLastBalanceMessageId() { return lastBalanceMessageId; }
+    public void setLastBalanceMessageId(Integer id) { this.lastBalanceMessageId = id; }
 }
