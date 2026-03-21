@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: SlideBot
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/Slide_Bot
+    username: slide_bot
+    password: root
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+telegram:
+  bot:
+    token: 8122095609:AAHVw2Vj4q1_9MJwMH6ngMncuK_Zga3TH-Y
+    username: AI_Slide_Assistant_Bot
+
+openai:
+  api-key: "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"
+
+
+
+logging:
+  level:
+    org.springframework: info
+    uz.ai.slideshowbot: debug
