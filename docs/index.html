@@ -2,266 +2,350 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Taqdimot yaratish</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Taqdimot | Slayd | PPT</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
  
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--tg-theme-bg-color, #fff);
-            color: var(--tg-theme-text-color, #000);
-            padding: 16px;
-            padding-bottom: 80px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0e1621;
+            color: #e8e8e8;
+            min-height: 100vh;
+            padding: 20px 16px 100px;
         }
  
         h1 {
-            font-size: 20px;
+            font-size: 21px;
             font-weight: 700;
-            text-align: center;
-            margin-bottom: 20px;
-            color: var(--tg-theme-text-color, #222);
+            color: #ffffff;
+            margin-bottom: 22px;
+            line-height: 1.35;
         }
  
-        .section {
-            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
-            border-radius: 12px;
-            padding: 14px;
-            margin-bottom: 14px;
-        }
+        /* Input fields */
+        .field-group { margin-bottom: 18px; }
  
-        .section label {
-            display: block;
-            font-size: 13px;
-            color: var(--tg-theme-hint-color, #888);
-            margin-bottom: 6px;
-        }
- 
-        input[type="text"], select {
+        input[type="text"] {
             width: 100%;
-            padding: 10px 12px;
-            border-radius: 8px;
-            border: 1.5px solid var(--tg-theme-hint-color, #ddd);
-            background: var(--tg-theme-bg-color, #fff);
-            color: var(--tg-theme-text-color, #000);
+            padding: 12px 14px;
+            background: #1c2733;
+            border: 1px solid #2a3a4a;
+            border-radius: 10px;
+            color: #ffffff;
             font-size: 15px;
             outline: none;
         }
+        input[type="text"]:focus { border-color: #3a7bd5; }
+        input::placeholder { color: #5a7080; }
  
-        input[type="text"]:focus, select:focus {
-            border-color: var(--tg-theme-button-color, #3390ec);
+        .field-hint {
+            font-size: 12px;
+            color: #4a8fd4;
+            margin-top: 6px;
+            line-height: 1.45;
         }
  
-        .char-count {
-            font-size: 11px;
-            color: var(--tg-theme-hint-color, #aaa);
-            text-align: right;
-            margin-top: 4px;
+        .field-hint-gray {
+            font-size: 12px;
+            color: #7a8a9a;
+            margin-top: 5px;
         }
  
-        .char-count.over { color: #e53935; }
+        /* Select */
+        .custom-select {
+            width: 100%;
+            padding: 12px 36px 12px 14px;
+            background: #1c2733;
+            border: 1px solid #2a3a4a;
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237a8a9a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            cursor: pointer;
+        }
+        .custom-select option { background: #1c2733; color: #fff; }
+        .custom-select:focus { border-color: #3a7bd5; }
  
-        /* Shablon grid */
+        /* Section title */
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 14px;
+        }
+ 
+        /* Template grid */
         .template-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
-            margin-top: 4px;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 8px;
         }
  
-        .tpl-btn {
-            aspect-ratio: 1;
-            border-radius: 8px;
+        .tpl-card {
+            background: #1c2733;
             border: 2px solid transparent;
-            background: var(--tg-theme-bg-color, #fff);
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s;
-            color: var(--tg-theme-text-color, #000);
-        }
- 
-        .tpl-btn.selected {
-            border-color: var(--tg-theme-button-color, #3390ec);
-            background: var(--tg-theme-button-color, #3390ec);
-            color: #fff;
-        }
- 
-        /* Tarif cards */
-        .tariff-card {
-            border: 2px solid var(--tg-theme-hint-color, #ddd);
             border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 10px;
+            overflow: hidden;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: border-color 0.18s;
         }
+        .tpl-card.selected { border-color: #3a7bd5; }
  
-        .tariff-card.selected {
-            border-color: var(--tg-theme-button-color, #3390ec);
-            background: rgba(51, 144, 236, 0.08);
-        }
- 
-        .tariff-title {
+        .tpl-preview {
+            width: 100%;
+            height: 100px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            margin-bottom: 4px;
-        }
- 
-        .tariff-price {
-            font-size: 14px;
-            color: var(--tg-theme-button-color, #3390ec);
-            font-weight: 700;
-        }
- 
-        .tariff-desc {
-            font-size: 12px;
-            color: var(--tg-theme-hint-color, #888);
-            margin-top: 4px;
-            line-height: 1.4;
-        }
- 
-        .radio-dot {
-            width: 18px; height: 18px;
-            border-radius: 50%;
-            border: 2px solid var(--tg-theme-hint-color, #ddd);
-            display: inline-flex;
-            align-items: center;
             justify-content: center;
-            flex-shrink: 0;
+            font-size: 10px;
+            color: rgba(255,255,255,0.7);
+            text-align: center;
+            padding: 6px;
+            line-height: 1.3;
+            position: relative;
+            overflow: hidden;
         }
  
-        .tariff-card.selected .radio-dot {
-            border-color: var(--tg-theme-button-color, #3390ec);
-            background: var(--tg-theme-button-color, #3390ec);
+        /* Template colors matching reference */
+        .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
+        .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
+        .tpl-3  { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
+        .tpl-4  { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); }
+        .tpl-5  { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); }
+        .tpl-6  { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); }
+        .tpl-7  { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); }
+        .tpl-8  { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
+        .tpl-9  { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
+        .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); }
+ 
+        .tpl-label {
+            font-size: 11px;
+            color: #8a9aaa;
+            text-align: center;
+            padding: 6px 4px 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
  
-        .radio-dot::after {
-            content: '';
-            width: 8px; height: 8px;
+        .tpl-note {
+            font-size: 12px;
+            color: #e06060;
+            margin-bottom: 20px;
+        }
+ 
+        /* Tariff */
+        .tariff-card {
+            background: #1c2733;
+            border: 2px solid #2a3a4a;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: border-color 0.18s;
+        }
+        .tariff-card.selected { border-color: #3a7bd5; }
+ 
+        .tariff-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+ 
+        .radio {
+            width: 20px; height: 20px;
             border-radius: 50%;
-            background: #fff;
+            border: 2px solid #4a5a6a;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: border-color 0.18s, background 0.18s;
+        }
+        .tariff-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
+        .radio-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%; background: white;
             display: none;
         }
+        .tariff-card.selected .radio-dot { display: block; }
  
-        .tariff-card.selected .radio-dot::after { display: block; }
+        .tariff-name { font-size: 16px; font-weight: 600; color: #fff; }
+        .tariff-price { font-size: 15px; color: #8ab4e8; margin-left: 4px; }
  
-        /* Submit button */
+        .tariff-stars { font-size: 14px; margin-bottom: 5px; }
+        .tariff-desc { font-size: 12.5px; color: #7a8a9a; line-height: 1.5; }
+ 
+        /* File format */
+        .format-card {
+            background: #1c2733;
+            border: 2px solid #2a3a4a;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: border-color 0.18s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .format-card.selected { border-color: #3a7bd5; }
+        .format-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
+        .format-card.selected .radio-dot { display: block; }
+ 
+        .format-text { font-size: 15px; color: #e8e8e8; }
+        .format-text span { font-weight: 700; color: #fff; }
+ 
+        /* Divider */
+        .divider { height: 1px; background: #1e2d3d; margin: 20px 0; }
+ 
+        /* Error */
+        .err-msg { font-size: 12px; color: #e06060; margin-top: 4px; display: none; }
+ 
+        /* Submit */
         .submit-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
             padding: 12px 16px;
-            background: var(--tg-theme-bg-color, #fff);
-            border-top: 1px solid var(--tg-theme-hint-color, #eee);
+            background: #0e1621;
+            border-top: 1px solid #1e2d3d;
         }
  
         .submit-btn {
             width: 100%;
-            padding: 14px;
-            border-radius: 10px;
+            padding: 15px;
+            border-radius: 12px;
             border: none;
-            background: var(--tg-theme-button-color, #3390ec);
-            color: var(--tg-theme-button-text-color, #fff);
-            font-size: 16px;
+            background: #3a7bd5;
+            color: #fff;
+            font-size: 17px;
             font-weight: 600;
             cursor: pointer;
         }
+        .submit-btn:active { opacity: 0.85; }
  
-        .submit-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
- 
-        .error-msg {
-            color: #e53935;
-            font-size: 12px;
-            margin-top: 4px;
-            display: none;
-        }
+        /* Template preview text styles */
+        .tpl-title { font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.8); text-align: left; padding: 8px; }
+        .tpl-lines { width: 70%; height: 2px; background: rgba(0,0,0,0.3); margin: 2px 8px; border-radius: 1px; }
+        .tpl-preview-inner { width: 100%; height: 100%; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
     </style>
 </head>
 <body>
  
-<h1>🎞️ AI orqali taqdimot</h1>
+    <h1>AI orqali prezentatsiya tayyorlash.</h1>
  
-<!-- MAVZU -->
-<div class="section">
-    <label>📝 Taqdimot mavzusi *</label>
-    <input type="text" id="topic" maxlength="150"
-           placeholder="Mavzuni kiriting..."
-           oninput="updateChar('topic', 150)">
-    <div class="char-count" id="topic-count">0 / 150</div>
-    <div class="error-msg" id="topic-err">Mavzu kiritilishi shart!</div>
-</div>
+    <!-- MAVZU -->
+    <div class="field-group">
+        <input type="text" id="topic" maxlength="150"
+               placeholder="Prezentatsiya qaysi mavzuda bo'lsin?"
+               oninput="document.getElementById('topic-err').style.display='none'">
+        <div class="field-hint">
+            Ushbu maydonda prezentatsiya mavzusini kiriting. Slaydni mavzusini to'liq va tushunarli kiriting. Agar mavzuyingiz tushunarsz bo'lsa qo'shimchasiga fan nomini ham kiritib keting.
+        </div>
+        <div class="err-msg" id="topic-err">Mavzu kiritilishi shart!</div>
+    </div>
  
-<!-- ISM -->
-<div class="section">
-    <label>🧑‍🏫 Muallif ism-familiyasi</label>
-    <input type="text" id="name" maxlength="40"
-           placeholder="Ism Familiya"
-           oninput="updateChar('name', 40)">
-    <div class="char-count" id="name-count">0 / 40</div>
-</div>
+    <!-- ISM -->
+    <div class="field-group">
+        <input type="text" id="name" maxlength="40" placeholder="Ism Familiya">
+        <div class="field-hint-gray">
+            Ushbu maydonda ism yoki familyangiz bo'lishi mumkin. Yoki telegram dagi ismingiz ni ishlatiladi
+        </div>
+    </div>
  
-<!-- TIL -->
-<div class="section">
-    <label>🌐 Taqdimot tili</label>
-    <select id="language">
-        <option value="UZ">🇺🇿 O'zbekcha</option>
-        <option value="RU">🇷🇺 Русский</option>
-        <option value="ENG">🇬🇧 English</option>
-        <option value="TOJ">🇹🇯 Тоҷикӣ</option>
-        <option value="TUR">🇹🇷 Türkçe</option>
-    </select>
-</div>
+    <!-- TIL -->
+    <div class="field-group">
+        <select class="custom-select" id="language">
+            <option value="" disabled selected>Tilni tanlang...</option>
+            <option value="UZ">O'zbekcha</option>
+            <option value="ENG">Inglizcha</option>
+            <option value="RU">Ruscha</option>
+            <option value="ES">Ispan tili</option>
+            <option value="DE">Nemis tili</option>
+            <option value="TOJ">Tojik tili</option>
+            <option value="TUR">Turk tili</option>
+        </select>
+        <div class="field-hint-gray">Prezentatsiya tili tanlang.</div>
+    </div>
  
-<!-- SAHIFA SONI -->
-<div class="section">
-    <label>📊 Slaydlar soni</label>
-    <select id="slideCount">
-        <option value="10">10 ta slayd – 3 000 so'm</option>
-        <option value="15">15 ta slayd – 4 000 so'm</option>
-        <option value="20">20 ta slayd – 5 000 so'm</option>
-    </select>
-</div>
+    <!-- SAHIFA SONI -->
+    <div class="field-group">
+        <select class="custom-select" id="slideCount">
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+        </select>
+        <div class="field-hint-gray">Taqdimotning sahifalar sonini kiriting</div>
+    </div>
  
-<!-- SHABLON -->
-<div class="section">
-    <label>🎨 Shablon tanlang (1–10)</label>
+    <div class="divider"></div>
+ 
+    <!-- SHABLON -->
+    <div class="section-title">Prezentatsya dizaynini tanlang</div>
     <div class="template-grid" id="templateGrid"></div>
-</div>
+    <div class="tpl-note">❗ Taqdimotning 4 chi va 5 chi sahifasidan boshlab rasmlar ham mavjud.</div>
  
-<!-- TARIF -->
-<div class="section">
-    <label>💎 Tarif tanlang</label>
+    <div class="divider"></div>
+ 
+    <!-- TARIF -->
+    <div class="section-title">O'zingizga mos tarifni tanlang 👇</div>
  
     <div class="tariff-card selected" id="tariff-3000" onclick="selectTariff('3000')">
-        <div class="tariff-title">
-            <span class="radio-dot"></span>
-            <span>⭐ Standart</span>
-            <span class="tariff-price">3 000 so'm</span>
+        <div class="tariff-row">
+            <div class="radio"><div class="radio-dot"></div></div>
+            <span class="tariff-name">Standart</span>
+            <span class="tariff-price">: 3000 so'm</span>
         </div>
-        <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
+        <div class="tariff-stars">⭐</div>
+        <div class="tariff-desc">2024-yilgacha bo'lgan internet ma'lumotlari asosida. Ilmiy ma'lumotlar ko'p bo'lmagan mavzular uchun. Chuqurroq mavzularda tavsiya etilmaydi.</div>
     </div>
  
     <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
-        <div class="tariff-title">
-            <span class="radio-dot"></span>
-            <span>⭐⭐ Premium</span>
-            <span class="tariff-price">5 000 so'm</span>
+        <div class="tariff-row">
+            <div class="radio"><div class="radio-dot"></div></div>
+            <span class="tariff-name">Premium</span>
+            <span class="tariff-price">: 5000 so'm</span>
         </div>
-        <div class="tariff-desc">2025-yilgacha ma'lumotlar. Sifatliroq matn, ilmiy terminlar uchun.</div>
+        <div class="tariff-stars">⭐⭐</div>
+        <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan internet ma'lumotlari asosida. Ilmiy terminlarga boy taqdimotlar uchun.</div>
     </div>
-</div>
  
-<!-- SUBMIT -->
-<div class="submit-bar">
-    <button class="submit-btn" id="submitBtn" onclick="submitForm()">✅ Taqdimot yaratish</button>
-</div>
+    <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
+        <div class="tariff-row">
+            <div class="radio"><div class="radio-dot"></div></div>
+            <span class="tariff-name">Yuqori Sifatli Premium</span>
+            <span class="tariff-price">: 7000 so'm</span>
+        </div>
+        <div class="tariff-stars">⭐⭐⭐</div>
+        <div class="tariff-desc">Eng kuchli model bo'lib, 2025-yilgacha bo'lgan internet ma'lumotlari asosida. Haqiqiy ilmiy mavzularda aniq fakt larga asoslangan kitoblar va ilmiy malumotlardan yig'ilgan model asosidagi tarif. Tavsiya etilgan tarif</div>
+    </div>
+ 
+    <div class="divider"></div>
+ 
+    <!-- FAYL FORMAT -->
+    <div class="section-title">Fayl formatini tanlang ❗❗❗</div>
+ 
+    <div class="format-card selected" id="fmt-pptx" onclick="selectFormat('pptx')">
+        <div class="radio"><div class="radio-dot"></div></div>
+        <div class="format-text"><span>.pptx</span>: Powerpoint</div>
+    </div>
+ 
+    <div class="format-card" id="fmt-pdf" onclick="selectFormat('pdf')">
+        <div class="radio"><div class="radio-dot"></div></div>
+        <div class="format-text"><span>.pptx</span>: PDF</div>
+    </div>
+ 
+    <!-- SUBMIT -->
+    <div class="submit-bar">
+        <button class="submit-btn" onclick="submitForm()">Submit</button>
+    </div>
  
 <script>
     const tg = window.Telegram.WebApp;
@@ -269,31 +353,58 @@
     tg.ready();
  
     let selectedTemplate = 1;
-    let selectedTariff = "3000";
+    let selectedTariff   = "3000";
+    let selectedFormat   = "pptx";
  
-    // Telegram user ismini default qilib qo'yish
+    // Template data
+    const templates = [
+        { name: "brown-history-3", size: "4-5 mb", cls: "tpl-1", textColor: "#fff" },
+        { name: "Brown history 2", size: "1 mb",   cls: "tpl-2", textColor: "#333" },
+        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3", textColor: "#555" },
+        { name: "Green World",     size: "4 mb",   cls: "tpl-4", textColor: "#fff" },
+        { name: "Biome",           size: "14 MB",  cls: "tpl-5", textColor: "#fff" },
+        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6", textColor: "#fff" },
+        { name: "Brown history",   size: "10-15 MB", cls: "tpl-7", textColor: "#fff" },
+        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8", textColor: "#333" },
+        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9", textColor: "#fff" },
+        { name: "Snow",            size: "10 mb",  cls: "tpl-10", textColor: "#333" },
+    ];
+ 
+    const grid = document.getElementById('templateGrid');
+    templates.forEach((t, i) => {
+        const n = i + 1;
+        const card = document.createElement('div');
+        card.className = 'tpl-card' + (n === 1 ? ' selected' : '');
+        card.id = 'tpl-' + n;
+        card.onclick = () => selectTemplate(n);
+        card.innerHTML = `
+            <div class="tpl-preview ${t.cls}">
+                <div class="tpl-preview-inner">
+                    <div style="font-size:9px;font-weight:700;color:${t.textColor};opacity:0.9;text-align:left;line-height:1.3;">
+                        Taqdimot<br>mavzusi
+                    </div>
+                    <div style="width:60%;height:2px;background:${t.textColor};opacity:0.3;border-radius:1px;margin-top:4px;"></div>
+                    <div style="width:40%;height:2px;background:${t.textColor};opacity:0.2;border-radius:1px;margin-top:2px;"></div>
+                    <div style="font-size:7px;color:${t.textColor};opacity:0.6;margin-top:6px;">Reja :</div>
+                    <div style="width:80%;height:1px;background:${t.textColor};opacity:0.2;margin-top:3px;"></div>
+                    <div style="width:70%;height:1px;background:${t.textColor};opacity:0.15;margin-top:2px;"></div>
+                    <div style="width:75%;height:1px;background:${t.textColor};opacity:0.15;margin-top:2px;"></div>
+                </div>
+            </div>
+            <div class="tpl-label">${t.name}. ${t.size}</div>
+        `;
+        grid.appendChild(card);
+    });
+ 
+    // Set TG name as default
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
         const defaultName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        if (defaultName) {
-            document.getElementById('name').value = defaultName;
-            updateChar('name', 40);
-        }
-    }
- 
-    // Shablon tugmalarini yaratish
-    const grid = document.getElementById('templateGrid');
-    for (let i = 1; i <= 10; i++) {
-        const btn = document.createElement('button');
-        btn.className = 'tpl-btn' + (i === 1 ? ' selected' : '');
-        btn.textContent = i;
-        btn.onclick = () => selectTemplate(i);
-        btn.id = 'tpl-' + i;
-        grid.appendChild(btn);
+        if (defaultName) document.getElementById('name').value = defaultName;
     }
  
     function selectTemplate(n) {
-        document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('selected'));
         document.getElementById('tpl-' + n).classList.add('selected');
         selectedTemplate = n;
     }
@@ -304,36 +415,39 @@
         selectedTariff = val;
     }
  
-    function updateChar(id, max) {
-        const input = document.getElementById(id);
-        const count = document.getElementById(id + '-count');
-        const len = input.value.length;
-        count.textContent = len + ' / ' + max;
-        count.className = 'char-count' + (len > max * 0.9 ? ' over' : '');
+    function selectFormat(val) {
+        document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
+        document.getElementById('fmt-' + val).classList.add('selected');
+        selectedFormat = val;
     }
  
     function submitForm() {
         const topic = document.getElementById('topic').value.trim();
-        const name = document.getElementById('name').value.trim() ||
-                     (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Foydalanuvchi');
-        const language = document.getElementById('language').value;
-        const slideCount = document.getElementById('slideCount').value;
+        const lang  = document.getElementById('language').value;
  
-        // Validatsiya
         if (!topic) {
             document.getElementById('topic-err').style.display = 'block';
             document.getElementById('topic').focus();
             return;
         }
-        document.getElementById('topic-err').style.display = 'none';
+        if (!lang) {
+            alert('Iltimos, tilni tanlang!');
+            return;
+        }
+ 
+        const name = document.getElementById('name').value.trim() ||
+                     (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Foydalanuvchi');
+ 
+        const slideCount = document.getElementById('slideCount').value;
  
         const data = JSON.stringify({
-            topic: topic,
-            name: name,
-            language: language,
+            topic:     topic,
+            name:      name,
+            language:  lang,
             slideCount: slideCount,
-            template: String(selectedTemplate),
-            tariff: selectedTariff
+            template:  String(selectedTemplate),
+            tariff:    selectedTariff,
+            format:    selectedFormat
         });
  
         tg.sendData(data);
