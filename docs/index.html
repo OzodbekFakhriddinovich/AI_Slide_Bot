@@ -13,7 +13,7 @@
             background: #0e1621;
             color: #e8e8e8;
             min-height: 100vh;
-            padding: 20px 16px 100px;
+            padding: 20px 16px 30px;
         }
  
         h1 {
@@ -24,7 +24,6 @@
             line-height: 1.35;
         }
  
-        /* Input fields */
         .field-group { margin-bottom: 18px; }
  
         input[type="text"] {
@@ -53,7 +52,6 @@
             margin-top: 5px;
         }
  
-        /* Select */
         .custom-select {
             width: 100%;
             padding: 12px 36px 12px 14px;
@@ -73,7 +71,6 @@
         .custom-select option { background: #1c2733; color: #fff; }
         .custom-select:focus { border-color: #3a7bd5; }
  
-        /* Section title */
         .section-title {
             font-size: 16px;
             font-weight: 600;
@@ -81,7 +78,6 @@
             margin-bottom: 14px;
         }
  
-        /* Template grid */
         .template-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -102,19 +98,9 @@
         .tpl-preview {
             width: 100%;
             height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            color: rgba(255,255,255,0.7);
-            text-align: center;
-            padding: 6px;
-            line-height: 1.3;
-            position: relative;
             overflow: hidden;
         }
  
-        /* Template colors matching reference */
         .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
         .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
         .tpl-3  { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
@@ -125,6 +111,15 @@
         .tpl-8  { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
         .tpl-9  { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
         .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); }
+ 
+        .tpl-inner {
+            width: 100%;
+            height: 100%;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
  
         .tpl-label {
             font-size: 11px;
@@ -142,7 +137,6 @@
             margin-bottom: 20px;
         }
  
-        /* Tariff */
         .tariff-card {
             background: #1c2733;
             border: 2px solid #2a3a4a;
@@ -169,21 +163,22 @@
             flex-shrink: 0;
             transition: border-color 0.18s, background 0.18s;
         }
-        .tariff-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
+        .tariff-card.selected .radio,
+        .format-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
+ 
         .radio-dot {
             width: 8px; height: 8px;
             border-radius: 50%; background: white;
             display: none;
         }
-        .tariff-card.selected .radio-dot { display: block; }
+        .tariff-card.selected .radio-dot,
+        .format-card.selected .radio-dot { display: block; }
  
         .tariff-name { font-size: 16px; font-weight: 600; color: #fff; }
         .tariff-price { font-size: 15px; color: #8ab4e8; margin-left: 4px; }
- 
         .tariff-stars { font-size: 14px; margin-bottom: 5px; }
         .tariff-desc { font-size: 12.5px; color: #7a8a9a; line-height: 1.5; }
  
-        /* File format */
         .format-card {
             background: #1c2733;
             border: 2px solid #2a3a4a;
@@ -197,25 +192,17 @@
             gap: 12px;
         }
         .format-card.selected { border-color: #3a7bd5; }
-        .format-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
-        .format-card.selected .radio-dot { display: block; }
- 
         .format-text { font-size: 15px; color: #e8e8e8; }
         .format-text span { font-weight: 700; color: #fff; }
  
-        /* Divider */
         .divider { height: 1px; background: #1e2d3d; margin: 20px 0; }
  
-        /* Error */
         .err-msg { font-size: 12px; color: #e06060; margin-top: 4px; display: none; }
  
-        /* Submit */
-        .submit-bar {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            padding: 12px 16px;
-            background: #0e1621;
-            border-top: 1px solid #1e2d3d;
+        /* ✅ SUBMIT — FIXED EMAS, ODDIY PASTDA */
+        .submit-wrap {
+            margin-top: 30px;
+            padding-bottom: 10px;
         }
  
         .submit-btn {
@@ -230,11 +217,6 @@
             cursor: pointer;
         }
         .submit-btn:active { opacity: 0.85; }
- 
-        /* Template preview text styles */
-        .tpl-title { font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.8); text-align: left; padding: 8px; }
-        .tpl-lines { width: 70%; height: 2px; background: rgba(0,0,0,0.3); margin: 2px 8px; border-radius: 1px; }
-        .tpl-preview-inner { width: 100%; height: 100%; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
     </style>
 </head>
 <body>
@@ -342,8 +324,8 @@
         <div class="format-text"><span>.pptx</span>: PDF</div>
     </div>
  
-    <!-- SUBMIT -->
-    <div class="submit-bar">
+    <!-- ✅ SUBMIT — SAHIFANING ENG PASTIDA -->
+    <div class="submit-wrap">
         <button class="submit-btn" onclick="submitForm()">Submit</button>
     </div>
  
@@ -356,18 +338,17 @@
     let selectedTariff   = "3000";
     let selectedFormat   = "pptx";
  
-    // Template data
     const templates = [
-        { name: "brown-history-3", size: "4-5 mb", cls: "tpl-1", textColor: "#fff" },
-        { name: "Brown history 2", size: "1 mb",   cls: "tpl-2", textColor: "#333" },
-        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3", textColor: "#555" },
-        { name: "Green World",     size: "4 mb",   cls: "tpl-4", textColor: "#fff" },
-        { name: "Biome",           size: "14 MB",  cls: "tpl-5", textColor: "#fff" },
-        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6", textColor: "#fff" },
-        { name: "Brown history",   size: "10-15 MB", cls: "tpl-7", textColor: "#fff" },
-        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8", textColor: "#333" },
-        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9", textColor: "#fff" },
-        { name: "Snow",            size: "10 mb",  cls: "tpl-10", textColor: "#333" },
+        { name: "brown-history-3", size: "4-5 mb", cls: "tpl-1", tc: "#fff" },
+        { name: "Brown history 2", size: "1 mb",   cls: "tpl-2", tc: "#333" },
+        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3", tc: "#555" },
+        { name: "Green World",     size: "4 mb",   cls: "tpl-4", tc: "#fff" },
+        { name: "Biome",           size: "14 MB",  cls: "tpl-5", tc: "#fff" },
+        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6", tc: "#fff" },
+        { name: "Brown history",   size: "10-15 MB",cls: "tpl-7", tc: "#fff" },
+        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8", tc: "#333" },
+        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9", tc: "#fff" },
+        { name: "Snow",            size: "10 mb",  cls: "tpl-10",tc: "#333" },
     ];
  
     const grid = document.getElementById('templateGrid');
@@ -379,16 +360,14 @@
         card.onclick = () => selectTemplate(n);
         card.innerHTML = `
             <div class="tpl-preview ${t.cls}">
-                <div class="tpl-preview-inner">
-                    <div style="font-size:9px;font-weight:700;color:${t.textColor};opacity:0.9;text-align:left;line-height:1.3;">
-                        Taqdimot<br>mavzusi
-                    </div>
-                    <div style="width:60%;height:2px;background:${t.textColor};opacity:0.3;border-radius:1px;margin-top:4px;"></div>
-                    <div style="width:40%;height:2px;background:${t.textColor};opacity:0.2;border-radius:1px;margin-top:2px;"></div>
-                    <div style="font-size:7px;color:${t.textColor};opacity:0.6;margin-top:6px;">Reja :</div>
-                    <div style="width:80%;height:1px;background:${t.textColor};opacity:0.2;margin-top:3px;"></div>
-                    <div style="width:70%;height:1px;background:${t.textColor};opacity:0.15;margin-top:2px;"></div>
-                    <div style="width:75%;height:1px;background:${t.textColor};opacity:0.15;margin-top:2px;"></div>
+                <div class="tpl-inner">
+                    <div style="font-size:9px;font-weight:700;color:${t.tc};opacity:0.9;line-height:1.3;">Taqdimot mavzusi</div>
+                    <div style="width:60%;height:2px;background:${t.tc};opacity:0.3;border-radius:1px;margin-top:4px;"></div>
+                    <div style="width:40%;height:2px;background:${t.tc};opacity:0.2;border-radius:1px;margin-top:2px;"></div>
+                    <div style="font-size:7px;color:${t.tc};opacity:0.6;margin-top:6px;">Reja :</div>
+                    <div style="width:80%;height:1px;background:${t.tc};opacity:0.2;margin-top:3px;"></div>
+                    <div style="width:70%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
+                    <div style="width:75%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
                 </div>
             </div>
             <div class="tpl-label">${t.name}. ${t.size}</div>
@@ -396,11 +375,11 @@
         grid.appendChild(card);
     });
  
-    // Set TG name as default
+    // TG name default
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
-        const defaultName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        if (defaultName) document.getElementById('name').value = defaultName;
+        const def = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
+        if (def) document.getElementById('name').value = def;
     }
  
     function selectTemplate(n) {
@@ -438,19 +417,15 @@
         const name = document.getElementById('name').value.trim() ||
                      (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Foydalanuvchi');
  
-        const slideCount = document.getElementById('slideCount').value;
- 
-        const data = JSON.stringify({
-            topic:     topic,
-            name:      name,
-            language:  lang,
-            slideCount: slideCount,
-            template:  String(selectedTemplate),
-            tariff:    selectedTariff,
-            format:    selectedFormat
-        });
- 
-        tg.sendData(data);
+        tg.sendData(JSON.stringify({
+            topic:      topic,
+            name:       name,
+            language:   lang,
+            slideCount: document.getElementById('slideCount').value,
+            template:   String(selectedTemplate),
+            tariff:     selectedTariff,
+            format:     selectedFormat
+        }));
     }
 </script>
 </body>
