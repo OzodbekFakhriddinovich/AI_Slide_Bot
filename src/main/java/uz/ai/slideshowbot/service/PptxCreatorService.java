@@ -1,142 +1,132 @@
 package uz.ai.slideshowbot.service;
 
 import org.apache.poi.sl.usermodel.PictureData;
+import org.apache.poi.sl.usermodel.TextParagraph;
 import org.apache.poi.xslf.usermodel.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.awt.*;
 import java.io.*;
 import java.net.URL;
-import java.nio.file.Files;
 import java.util.List;
-import java.util.Random;
 
 @Service
 public class PptxCreatorService {
 
-    public String createPptx(String topic, String userName, String subjectName, List<GptTextGeneratorService.SlideData> slides, String template) throws IOException {
+    @Autowired
+    private ImageSearchService imageSearchService;
+
+    public String createPptx(String topic, String userName, String subjectName,
+                             List<GptTextGeneratorService.SlideData> slides, String template) throws IOException {
+
         File dir = new File("slides");
         if (!dir.exists()) dir.mkdirs();
 
         XMLSlideShow ppt = new XMLSlideShow();
-        Random rand = new Random();
 
-        Color bgColor = switch (template != null ? template : "") {
-            case "Science" -> new Color(200, 230, 255);
-            case "Art" -> new Color(255, 240, 200);
+        Color bgColor = switch (template != null ? template : "1") {
+            case "2" -> new Color(240, 248, 255);
+            case "3" -> new Color(255, 250, 240);
             default -> Color.WHITE;
         };
 
-        if (!slides.isEmpty()) {
-            XSLFSlide firstSlide = ppt.createSlide();
-            firstSlide.getBackground().setFillColor(bgColor);
+        XSLFSlide titleSlide = ppt.createSlide();
+        titleSlide.getBackground().setFillColor(bgColor);
 
-            XSLFTextBox headerBox = firstSlide.createTextBox();
-            headerBox.setAnchor(new java.awt.Rectangle(50, 50, 600, 100));
-            XSLFTextParagraph headerPara = headerBox.addNewTextParagraph();
-            XSLFTextRun headerRun = headerPara.addNewTextRun();
-            headerRun.setText(topic + "\n" + userName + "\n" + subjectName);
-            headerRun.setFontSize(28.0);
-            headerRun.setBold(true);
+        XSLFTextBox titleBox = titleSlide.createTextBox();
+        titleBox.setAnchor(new Rectangle(50, 50, 620, 100));
+        XSLFTextParagraph p1 = titleBox.addNewTextParagraph();
+        p1.setTextAlign(TextParagraph.TextAlign.CENTER);     // ✅ TO'G'RI ishlatish
+        XSLFTextRun r1 = p1.addNewTextRun();
+        r1.setText(topic.toUpperCase());
+        r1.setFontSize(32.0);
+        r1.setBold(true);
+        r1.setFontColor(new Color(44, 62, 80));
 
-            byte[] imgBytes = getImageBytes();
-            if (imgBytes != null) {
-                XSLFPictureData pictureData = ppt.addPicture(imgBytes, PictureData.PictureType.PNG);
-                XSLFPictureShape pic = firstSlide.createPicture(pictureData);
-                pic.setAnchor(new java.awt.Rectangle(100, 200, 500, 300));
+        XSLFTextBox infoBox = titleSlide.createTextBox();
+        infoBox.setAnchor(new Rectangle(50, 400, 620, 50));
+        XSLFTextParagraph p2 = infoBox.addNewTextParagraph();
+        p2.setTextAlign(TextParagraph.TextAlign.RIGHT);      // ✅ TO'G'RI ishlatish
+        XSLFTextRun r2 = p2.addNewTextRun();
+        r2.setText("Tayyorladi: " + userName + (subjectName.isEmpty() ? "" : " | " + subjectName));
+        r2.setFontSize(18.0);
+        r2.setItalic(true);
+
+        addWebImageToSlide(ppt, titleSlide, topic, new Rectangle(160, 150, 400, 230));
+
+        if (slides != null && !slides.isEmpty()) {
+            XSLFSlide planSlide = ppt.createSlide();
+            planSlide.getBackground().setFillColor(bgColor);
+
+            XSLFTextBox planTitle = planSlide.createTextBox();
+            planTitle.setAnchor(new Rectangle(50, 20, 600, 50));
+            XSLFTextRun ptr = planTitle.addNewTextParagraph().addNewTextRun();
+            ptr.setText("TAQDIMOT REJASI:");
+            ptr.setFontSize(24.0);
+            ptr.setBold(true);
+
+            XSLFTextBox planContent = planSlide.createTextBox();
+            planContent.setAnchor(new Rectangle(70, 80, 580, 350));
+            for (int i = 0; i < slides.size(); i++) {
+                XSLFTextParagraph p = planContent.addNewTextParagraph();
+                p.setBullet(true);
+                XSLFTextRun r = p.addNewTextRun();
+                r.setText(slides.get(i).title);
+                r.setFontSize(20.0);
             }
         }
 
-        XSLFSlide planSlide = ppt.createSlide();
-        planSlide.getBackground().setFillColor(bgColor);
-        XSLFTextBox planBox = planSlide.createTextBox();
-        planBox.setAnchor(new java.awt.Rectangle(50, 50, 600, 400));
-
-        XSLFTextParagraph planTitle = planBox.addNewTextParagraph();
-        XSLFTextRun planTitleRun = planTitle.addNewTextRun();
-        planTitleRun.setText("Reja:");
-        planTitleRun.setFontSize(24.0);
-        planTitleRun.setBold(true);
-
-        if (!slides.isEmpty() && slides.get(0).bullets != null) {
-            for (String bullet : slides.get(0).bullets) {
-                if (bullet != null && !bullet.isBlank()) {
-                    XSLFTextParagraph p = planBox.addNewTextParagraph();
-                    p.setBullet(true);
-                    XSLFTextRun r = p.addNewTextRun();
-                    r.setText(bullet);
-                    r.setFontSize(20.0);
-                }
-            }
-        }
-
-        for (int i = 1; i < slides.size(); i++) {
-            GptTextGeneratorService.SlideData slideData = slides.get(i);
-            if (slideData == null) continue;
-
+        for (GptTextGeneratorService.SlideData data : slides) {
             XSLFSlide slide = ppt.createSlide();
             slide.getBackground().setFillColor(bgColor);
 
-            byte[] imgBytes = getImageBytes();
-            int imgWidth = 300 + rand.nextInt(200);
-            int imgHeight = 200 + rand.nextInt(100);
-            int[] possibleX = {50, 250, 450};
-            int imgX = possibleX[rand.nextInt(possibleX.length)];
-            int imgY = 100;
+            XSLFTextBox head = slide.createTextBox();
+            head.setAnchor(new Rectangle(50, 20, 620, 50));
+            XSLFTextRun hr = head.addNewTextParagraph().addNewTextRun();
+            hr.setText(data.title);
+            hr.setFontSize(26.0);
+            hr.setBold(true);
+            hr.setFontColor(new Color(22, 160, 133));
 
-            if (imgBytes != null) {
-                XSLFPictureData pictureData = ppt.addPicture(imgBytes, PictureData.PictureType.PNG);
-                XSLFPictureShape pic = slide.createPicture(pictureData);
-                pic.setAnchor(new java.awt.Rectangle(imgX, imgY, imgWidth, imgHeight));
-            }
-
-            int textX = (imgX < 250) ? 300 : 50;
-            int textWidth = 600 - imgWidth - 50;
-            XSLFTextBox textBox = slide.createTextBox();
-            textBox.setAnchor(new java.awt.Rectangle(textX, 100, textWidth, 400));
-
-            XSLFTextParagraph titlePara = textBox.addNewTextParagraph();
-            XSLFTextRun titleRun = titlePara.addNewTextRun();
-            titleRun.setText(slideData.title != null ? slideData.title : "Slide Title");
-            titleRun.setFontSize(22.0);
-            titleRun.setBold(true);
-
-            if (slideData.bullets != null) {
-                for (String bullet : slideData.bullets) {
-                    if (bullet == null || bullet.isBlank()) continue;
-                    XSLFTextParagraph p = textBox.addNewTextParagraph();
-                    p.setBullet(true);
-                    XSLFTextRun run = p.addNewTextRun();
-                    run.setText(bullet);
-                    run.setFontSize(18.0);
+            XSLFTextBox body = slide.createTextBox();
+            body.setAnchor(new Rectangle(50, 80, 340, 350));
+            if (data.bullets != null) {
+                for (String b : data.bullets) {
+                    XSLFTextParagraph bp = body.addNewTextParagraph();
+                    bp.setBullet(true);
+                    XSLFTextRun br = bp.addNewTextRun();
+                    br.setText(b);
+                    br.setFontSize(18.0);
                 }
             }
+
+            String query = (data.imageQuery != null && !data.imageQuery.isEmpty()) ? data.imageQuery : topic + " " + data.title;
+            addWebImageToSlide(ppt, slide, query, new Rectangle(410, 100, 290, 260));
         }
 
-        String safeTopic = (topic == null || topic.isBlank()) ? "slides" : topic.replaceAll("\\s+", "_");
-        String filePath = "slides/" + safeTopic + "_" + System.currentTimeMillis() + ".pptx";
-
-        try (FileOutputStream out = new FileOutputStream(filePath)) {
+        String fileName = "slides/" + topic.replaceAll("[^a-zA-Z0-9]", "_") + "_" + System.currentTimeMillis() + ".pptx";
+        try (FileOutputStream out = new FileOutputStream(fileName)) {
             ppt.write(out);
         }
         ppt.close();
-        return filePath;
+
+        return fileName;
     }
 
-    private byte[] getImageBytes() {
+    private void addWebImageToSlide(XMLSlideShow ppt, XSLFSlide slide, String query, Rectangle anchor) {
         try {
-            String picsumUrl = "https://picsum.photos/600/400";
-            try (InputStream in = new URL(picsumUrl).openStream()) {
-                return in.readAllBytes();
+            String imageUrl = imageSearchService.findImageUrl(query);
+            if (imageUrl != null && !imageUrl.isEmpty()) {
+                try (InputStream is = new URL(imageUrl).openStream()) {
+                    byte[] imageBytes = is.readAllBytes();
+                    XSLFPictureData pd = ppt.addPicture(imageBytes, PictureData.PictureType.PNG);
+                    XSLFPictureShape pic = slide.createPicture(pd);
+                    pic.setAnchor(anchor);
+                }
             }
         } catch (Exception e) {
-            try {
-                File fallback = new File("src/main/resources/static/no_image.png");
-                if (fallback.exists()) {
-                    return Files.readAllBytes(fallback.toPath());
-                }
-            } catch (IOException ignored) {}
+            System.err.println("Rasm yuklashda xatolik (" + query + "): " + e.getMessage());
         }
-        return null;
     }
 }

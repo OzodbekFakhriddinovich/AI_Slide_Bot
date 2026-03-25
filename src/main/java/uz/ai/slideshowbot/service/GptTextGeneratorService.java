@@ -1,80 +1,91 @@
 package uz.ai.slideshowbot.service;
 
-import com.theokanning.openai.completion.CompletionChoice;
-import com.theokanning.openai.completion.CompletionRequest;
-import com.theokanning.openai.service.OpenAiService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class GptTextGeneratorService {
 
-    private final OpenAiService openAiService;
+    @Value("${gemini.api-key}")
+    private String apiKey;
+
+    private final String
+            GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=";
+
     private final ObjectMapper mapper = new ObjectMapper();
+    private final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(45, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(45, TimeUnit.SECONDS)
+            .build();
 
-    public GptTextGeneratorService(@Value("${openai.api-key}") String apiKey) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("❌ OpenAI API key not found in application.yml");
-        }
-        this.openAiService = new OpenAiService(apiKey, Duration.ofSeconds(60));
-    }
+    public List<SlideData> generateSlides(String topic, int slideCount, String language) {
+        String prompt = String.format(
+                "Sen prezentatsiya materiallari tayyorlaydigan mutaxassisan. Mavzu: '%s'. Slaydlar soni: %d. Til: %s. " +
+                        "Har bir slayd uchun: 'title', 'bullets' va 'imageQuery' tayyorla. " +
+                        "Javobni FAQAT toza JSON formatida, hech qanday qo'shimcha matnsiz qaytar. " +
+                        "Format: [{\"title\": \"...\", \"bullets\": [\"...\", \"...\"], \"imageQuery\": \"...\"}]",
+                topic, slideCount, language
+        );
 
-    @PostConstruct
-    public void verifyApiKey() {
-        System.out.println("✅ OpenAI API key successfully loaded.");
-    }
-
-    public List<SlideData> generateSlides(String topic, int slideCount) throws Exception {
-        return generateSlides(topic, slideCount, "uz");
-    }
-
-    public List<SlideData> generateSlides(String topic, int slideCount, String language) throws Exception {
-        String prompt = String.format("""
-            Create %d detailed slides about "%s" in %s.
-            Each slide must follow these rules:
-            - "title": 1 meaningful sentence summarizing the slide content (at least 5 words)
-            - "bullets": 3–5 bullet points, each with real examples, statistics, or explanations
-            - "image": a short description of an image illustrating the slide concept
-            Return ONLY a valid JSON array WITHOUT extra text or comments:
-            [{"title":"...", "bullets":["...","..."], "image":"..."}]
-            """, slideCount, topic, language);
-
-        CompletionRequest request = CompletionRequest.builder()
-                .model("gpt-3.5-turbo-instruct")
-                .prompt(prompt)
-                .maxTokens(2000)
-                .temperature(0.7)
-                .build();
-
-        List<CompletionChoice> choices = openAiService.createCompletion(request).getChoices();
-        if (choices.isEmpty()) throw new RuntimeException("❌ GPT returned no response.");
-
-        String result = choices.get(0).getText().trim()
-                .replaceAll("(?m)^```json\\s*", "")
-                .replaceAll("(?m)^```$", "");
-
-        SlideData[] slides;
         try {
-            slides = mapper.readValue(result, SlideData[].class);
+            Map<String, Object> requestBodyMap = Map.of(
+                    "contents", List.of(Map.of(
+                            "parts", List.of(Map.of("text", prompt))
+                    ))
+            );
+
+            String jsonRequest = mapper.writeValueAsString(requestBodyMap);
+            RequestBody body = RequestBody.create(jsonRequest, MediaType.get("application/json"));
+
+            Request request = new Request.Builder()
+                    .url(GEMINI_URL + apiKey)
+                    .post(body)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
+
+                if (!response.isSuccessful()) {
+                    System.err.println("Gemini API xatosi: " + responseBody);
+                    throw new RuntimeException("API xatosi kodi: " + response.code());
+                }
+
+                JsonNode root = mapper.readTree(responseBody);
+                JsonNode candidates = root.path("candidates");
+
+                if (candidates.isMissingNode() || candidates.size() == 0) {
+                    throw new RuntimeException("Gemini mos javob qaytarmadi.");
+                }
+
+                String content = candidates.get(0)
+                        .path("content").path("parts").get(0)
+                        .path("text").asText();
+
+                String cleanJson = content.trim();
+                if (cleanJson.contains("[")) {
+                    cleanJson = cleanJson.substring(cleanJson.indexOf("["), cleanJson.lastIndexOf("]") + 1);
+                }
+
+                return mapper.readValue(cleanJson, new TypeReference<List<SlideData>>() {});
+            }
         } catch (Exception e) {
-            throw new RuntimeException("❌ JSON parse xatosi. GPT javobi:\n" + result, e);
+            System.err.println("Slayd yaratishda xatolik: " + e.getMessage());
+            throw new RuntimeException("Slayd yaratishda xatolik: " + e.getMessage());
         }
-
-        List<SlideData> slideList = new ArrayList<>();
-        for (SlideData s : slides) slideList.add(s);
-
-        return slideList;
     }
 
     public static class SlideData {
         public String title;
         public List<String> bullets;
-        public String image;
+        public String imageQuery;
     }
 }
