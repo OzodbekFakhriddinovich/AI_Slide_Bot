@@ -26,12 +26,12 @@ telegram:
 
 google:
   search:
-    api-key: "AIzaSyCZNPZkCsyH3jF4Aybsbs3MG_HDlhO7wl0"
-    cx: "724a919f9479e491e"
+    api-key: AIzaSyBRzFF9z7kg34gRUqJXQesbZSW3kw5Jodc   # Cloud Console → Google Search uchun
+    cx: 724a919f9479e491e
 
 
 gemini:
-  api-key: "AIzaSyBc2hwdtnLHAGdiqZaM70Z4yOUqqzy5bPQ"
+  api-key: AIzaSyDBPFqJLxV7En1p8dTVGbCRSBtuUuTVZvM    # AI Studio → Gemini uchun
 
 logging:
   level:

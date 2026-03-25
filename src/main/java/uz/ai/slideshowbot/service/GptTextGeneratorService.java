@@ -18,7 +18,7 @@ public class GptTextGeneratorService {
     private String apiKey;
 
     private final String
-            GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=";
+            GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final OkHttpClient client = new OkHttpClient.Builder()
