@@ -21,17 +21,16 @@ server:
 
 telegram:
   bot:
-    token: 8122095609:AAGxVLSwHVlD5HO5B07_p7kff3gI1Cm5uto
+    token: ${TELEGRAM_BOT_TOKEN}
     username: AI_Slide_Assistant_Bot
 
 google:
   search:
-    api-key: AIzaSyBRzFF9z7kg34gRUqJXQesbZSW3kw5Jodc   # Cloud Console → Google Search uchun
-    cx: 724a919f9479e491e
-
+    api-key: ${GOOGLE_SEARCH_API_KEY}
+    cx: ${GOOGLE_SEARCH_CX}
 
 gemini:
-  api-key: AIzaSyDBPFqJLxV7En1p8dTVGbCRSBtuUuTVZvM    # AI Studio → Gemini uchun
+  api-key: ${GEMINI_API_KEY}
 
 logging:
   level:
