@@ -82,12 +82,21 @@
             margin-bottom: 14px;
         }
  
-        .template-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        /* ── HORIZONTAL SCROLL TEMPLATE ROW ── */
+        .template-row {
+            display: flex;
+            flex-direction: row;
             gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
             margin-bottom: 8px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: #2a3a4a transparent;
         }
+        .template-row::-webkit-scrollbar { height: 4px; }
+        .template-row::-webkit-scrollbar-track { background: transparent; }
+        .template-row::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
  
         .tpl-card {
             background: #1c2733;
@@ -96,11 +105,13 @@
             overflow: hidden;
             cursor: pointer;
             transition: border-color 0.18s;
+            flex-shrink: 0;
+            width: 130px;
         }
         .tpl-card.selected { border-color: #3a7bd5; }
         .tpl-card.error-tpl { border-color: #e06060; }
  
-        .tpl-preview { width: 100%; height: 100px; overflow: hidden; }
+        .tpl-preview { width: 100%; height: 90px; overflow: hidden; }
  
         .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
         .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
@@ -119,8 +130,8 @@
         }
  
         .tpl-label {
-            font-size: 11px; color: #8a9aaa;
-            text-align: center; padding: 6px 4px 8px;
+            font-size: 10px; color: #8a9aaa;
+            text-align: center; padding: 5px 4px 7px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
  
@@ -260,7 +271,10 @@
  
     <div class="section-title">Prezentatsiya dizaynini tanlang</div>
     <div class="section-err" id="template-err">⚠️ Shablon tanlanmadi — bitta tanlang!</div>
-    <div class="template-grid" id="templateGrid"></div>
+ 
+    <!-- HORIZONTAL SCROLL ROW -->
+    <div class="template-row" id="templateGrid"></div>
+ 
     <div class="tpl-note">❗ 4–5-sahifalardan boshlab rasmlar ham mavjud.</div>
  
     <div class="divider"></div>
@@ -322,7 +336,7 @@
     tg.expand();
     tg.ready();
  
-    let selectedTemplate = null; 
+    let selectedTemplate = null;
     let selectedTariff   = "3000";
     let selectedFormat   = "pptx";
  
@@ -349,24 +363,34 @@
         card.innerHTML = `
             <div class="tpl-preview ${t.cls}">
                 <div class="tpl-inner">
-                    <div style="font-size:9px;font-weight:700;color:${t.tc};opacity:0.9;line-height:1.3;">Taqdimot mavzusi</div>
+                    <div style="font-size:8px;font-weight:700;color:${t.tc};opacity:0.9;line-height:1.3;">Taqdimot mavzusi</div>
                     <div style="width:60%;height:2px;background:${t.tc};opacity:0.3;border-radius:1px;margin-top:4px;"></div>
                     <div style="width:40%;height:2px;background:${t.tc};opacity:0.2;border-radius:1px;margin-top:2px;"></div>
-                    <div style="font-size:7px;color:${t.tc};opacity:0.6;margin-top:6px;">Reja:</div>
+                    <div style="font-size:6px;color:${t.tc};opacity:0.6;margin-top:5px;">Reja:</div>
                     <div style="width:80%;height:1px;background:${t.tc};opacity:0.2;margin-top:3px;"></div>
                     <div style="width:70%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
                     <div style="width:75%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
                 </div>
             </div>
-            <div class="tpl-label">${t.name} · ${t.size}</div>
+            <div class="tpl-label">${n}. ${t.name}</div>
         `;
         grid.appendChild(card);
     });
  
+    // ── AUTO-FILL NAME FROM TELEGRAM ──
+    // Priority: first_name + last_name → username → bo'sh
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
-        const def = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        if (def) document.getElementById('name').value = def;
+        const fullName = [tgUser.first_name, tgUser.last_name]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+ 
+        const displayName = fullName || tgUser.username || '';
+ 
+        if (displayName) {
+            document.getElementById('name').value = displayName;
+        }
     }
  
     function selectTemplate(n) {
@@ -442,7 +466,9 @@
         submitBtn.textContent = '⏳ Yuborilmoqda...';
  
         const name = document.getElementById('name').value.trim() ||
-                     (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Foydalanuvchi');
+                     (tgUser
+                         ? ([tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || tgUser.username || 'Foydalanuvchi')
+                         : 'Foydalanuvchi');
  
         const slideCount = document.getElementById('slideCount').value;
  
