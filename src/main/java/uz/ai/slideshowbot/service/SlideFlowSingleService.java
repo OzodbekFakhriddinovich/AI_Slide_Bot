@@ -34,19 +34,20 @@ public class SlideFlowSingleService {
 
     @SuppressWarnings("unchecked")
     public void handleWebAppData(UserEntity user, Message message, SlideBot bot) {
-        Long chatId = message.getChatId();
-        String lang = (user.getLanguage() != null) ? user.getLanguage() : "UZ";
+        Long   chatId = message.getChatId();
+        String lang   = (user.getLanguage() != null) ? user.getLanguage() : "UZ";
 
         try {
-            String jsonData = message.getWebAppData().getData();
+            String          jsonData = message.getWebAppData().getData();
             Map<String, Object> data = objectMapper.readValue(jsonData, Map.class);
 
             String topic         = String.valueOf(data.getOrDefault("topic", "")).trim();
-            String name          = String.valueOf(data.getOrDefault("name", user.getFirstName() != null ? user.getFirstName() : "Foydalanuvchi")).trim();
+            String name          = String.valueOf(data.getOrDefault("name",
+                    user.getFirstName() != null ? user.getFirstName() : "Foydalanuvchi")).trim();
             String slideLanguage = String.valueOf(data.getOrDefault("language", "UZ"));
-            int slideCount       = parseIntSafe(data.get("slideCount"), 10);
+            int    slideCount    = parseIntSafe(data.get("slideCount"), 10);
             String templateNum   = String.valueOf(data.getOrDefault("template", "1"));
-            int cost             = parseIntSafe(data.get("tariff"), 3000);
+            int    cost          = parseIntSafe(data.get("tariff"), 3000);
 
             if (topic.isEmpty()) {
                 sendError(bot, chatId, lang, "Mavzu kiritilishi shart!");
@@ -55,9 +56,9 @@ public class SlideFlowSingleService {
 
             if (user.getBalance() == null || user.getBalance() < cost) {
                 String errorMsg = switch (lang) {
-                    case "RU" -> "Недостаточно средств на балансе! /buy";
+                    case "RU"  -> "Недостаточно средств на балансе! /buy";
                     case "ENG" -> "Insufficient balance! /buy";
-                    default -> "Balansingizda mablag' yetarli emas! To'ldirish uchun: /buy";
+                    default    -> "Balansingizda mablag' yetarli emas! To'ldirish uchun: /buy";
                 };
                 sendError(bot, chatId, lang, errorMsg);
                 return;
@@ -74,15 +75,22 @@ public class SlideFlowSingleService {
 
             sendWaitingMessage(bot, chatId, lang);
 
+            // ─── Alohida thread: AI + PPTX yaratish ───────────────────────
             new Thread(() -> {
                 try {
-                    List<GptTextGeneratorService.SlideData> slideDataList =
-                            gptService.generateSlides(topic, slideCount, slideLanguage);
+                    // 1. Gemini'dan reja (4 ta section) + slayd kontentni olish
+                    GptTextGeneratorService.GeneratedContent generated =
+                            gptService.generatePresentation(topic, slideCount, slideLanguage, cost);
 
+                    List<String>                               sections = generated.sections();
+                    List<GptTextGeneratorService.SlideData>    slides   = generated.slides();
+
+                    // 2. PPTX yaratish (sections + slides alohida)
                     String pptxPath = pptxService.createPptx(
-                            topic, name, "", slideDataList, templateNum
+                            topic, name, "", sections, slides, templateNum
                     );
 
+                    // 3. Faylni yuborish
                     File file = new File(pptxPath);
                     if (file.exists()) {
                         SendDocument doc = new SendDocument();
@@ -90,7 +98,6 @@ public class SlideFlowSingleService {
                         doc.setDocument(new InputFile(file));
                         doc.setCaption(getSuccessCaption(lang, topic, user.getBalance()));
                         bot.execute(doc);
-
                         file.delete();
                     }
 
@@ -109,7 +116,7 @@ public class SlideFlowSingleService {
         }
     }
 
-
+    // ─────────────────────────────────────────────────────────────────────────
     public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
         try {
             AnswerCallbackQuery answer = new AnswerCallbackQuery();
@@ -121,42 +128,43 @@ public class SlideFlowSingleService {
         }
     }
 
-
     public void handleMessage(UserEntity user, Message message, SlideBot bot) {
-        Long chatId = message.getChatId();
-        String text = message.getText();
+        Long   chatId = message.getChatId();
+        String text   = message.getText();
 
         if (user.getState() == UserState.WAITING_TOPIC) {
             user.setTopic(text);
             user.setState(UserState.WAITING_INFO);
             userRepository.save(user);
-
             send(bot, chatId, "Mavzu qabul qilindi. Endi qo'shimcha ma'lumot yuboring.");
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Yordamchi metodlar
+    // ─────────────────────────────────────────────────────────────────────────
     private void sendWaitingMessage(SlideBot bot, Long chatId, String lang) {
         String text = switch (lang) {
-            case "RU" -> "🧠 ИИ создает презентацию с картинками... ⏳\nЭто займет около 1-2 минут.";
+            case "RU"  -> "🧠 ИИ создает презентацию с картинками... ⏳\nЭто займет около 1-2 минут.";
             case "ENG" -> "🧠 AI is generating your presentation with images... ⏳\nIt will take about 1-2 minutes.";
-            default -> "🧠 Sun'iy intellekt rasmli taqdimot tayyorlamoqda... ⏳\n1-2 daqiqa vaqt olishi mumkin.";
+            default    -> "🧠 Sun'iy intellekt rasmli taqdimot tayyorlamoqda... ⏳\n1-2 daqiqa vaqt olishi mumkin.";
         };
         send(bot, chatId, text);
     }
 
     private String getSuccessCaption(String lang, String topic, Integer balance) {
         return switch (lang) {
-            case "RU" -> "✅ Готово!\n📊 Тема: " + topic + "\n💰 Баланс: " + balance + " сум";
+            case "RU"  -> "✅ Готово!\n📊 Тема: " + topic + "\n💰 Баланс: " + balance + " сум";
             case "ENG" -> "✅ Finished!\n📊 Topic: " + topic + "\n💰 Balance: " + balance + " UZS";
-            default -> "✅ Tayyor!\n📊 Mavzu: " + topic + "\n💰 Qolgan balans: " + balance + " so'm";
+            default    -> "✅ Tayyor!\n📊 Mavzu: " + topic + "\n💰 Qolgan balans: " + balance + " so'm";
         };
     }
 
     private void handleCreationError(SlideBot bot, Long chatId, String lang, int cost, UserEntity user) {
         String msg = switch (lang) {
-            case "RU" -> "Xatolik yuz berdi. Mablag' qaytarildi.";
+            case "RU"  -> "Произошла ошибка. Средства возвращены.";
             case "ENG" -> "Error occurred. Funds returned.";
-            default -> "Slayd yaratishda xatolik yuz berdi. Mablag' balansingizga qaytarildi.";
+            default    -> "Slayd yaratishda xatolik yuz berdi. Mablag' balansingizga qaytarildi.";
         };
         sendError(bot, chatId, lang, msg);
         try {
@@ -180,10 +188,7 @@ public class SlideFlowSingleService {
 
     private int parseIntSafe(Object val, int defaultVal) {
         if (val == null) return defaultVal;
-        try {
-            return Integer.parseInt(String.valueOf(val));
-        } catch (Exception e) {
-            return defaultVal;
-        }
+        try { return Integer.parseInt(String.valueOf(val)); }
+        catch (Exception e) { return defaultVal; }
     }
 }

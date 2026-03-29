@@ -10,50 +10,94 @@ import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ImageSearchService {
 
-    @Value("${google.search.api-key}")
+    @Value("${pixabay.api-key}")
     private String apiKey;
 
-    @Value("${google.search.cx}")
-    private String cx;
-
-    private final OkHttpClient client = new OkHttpClient();
+    private final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /**
+     * Mavzuga mos katta, sifatli rasm URL ni qaytaradi.
+     * Prioritet: fullHDURL → largeImageURL → webformatURL → fallback
+     */
+    public String findImageUrl(String query, String topic) {
+        // Birinchi urinish: to'liq query bilan
+        String url = trySearch(query + " " + topic);
+        if (url != null) return url;
 
-    public String findImageUrl(String query) {
+        // Ikkinchi urinish: faqat topic bilan
+        url = trySearch(topic + " concept");
+        if (url != null) return url;
+
+        // Uchinchi urinish: keng qidiruv
+        url = trySearch(topic);
+        if (url != null) return url;
+
+        // Fallback - aniq o'lchamli placeholder (katta fayl uchun)
+        return "https://picsum.photos/1920/1080";
+    }
+
+    private String trySearch(String searchText) {
         try {
-            String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
+            String encodedQuery = URLEncoder.encode(searchText, StandardCharsets.UTF_8);
 
-
+            // per_page=5 - eng yaxshi 5 ta variantdan birini tanlaydi
             String url = String.format(
-                    "https://www.googleapis.com/customsearch/v1?q=%s&cx=%s&key=%s&searchType=image&num=1",
-                    encodedQuery, cx, apiKey
+                    "https://pixabay.com/api/?key=%s&q=%s&image_type=photo" +
+                            "&per_page=5&safesearch=true&min_width=1280&order=popular",
+                    apiKey, encodedQuery
             );
 
-            Request request = new Request.Builder()
-                    .url(url)
-                    .build();
+            Request request = new Request.Builder().url(url).build();
 
             try (Response response = client.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String responseBody = response.body().string();
-                    JsonNode root = mapper.readTree(responseBody);
+                if (!response.isSuccessful() || response.body() == null) return null;
 
-                    if (root.has("items") && root.get("items").isArray() && root.get("items").size() > 0) {
-                        return root.get("items").get(0).get("link").asText();
+                String body = response.body().string();
+                JsonNode root = mapper.readTree(body);
+                JsonNode hits = root.path("hits");
+
+                if (!hits.isArray() || hits.size() == 0) return null;
+
+                // Eng katta rasmni tanlash (piksel bo'yicha)
+                JsonNode best     = null;
+                long    bestPixels = 0;
+
+                for (JsonNode hit : hits) {
+                    long pixels = hit.path("imageWidth").asLong(0)
+                            * hit.path("imageHeight").asLong(0);
+                    if (pixels > bestPixels) {
+                        bestPixels = pixels;
+                        best       = hit;
                     }
-                } else {
-                    System.err.println("Google API xatosi: " + response.code() + " " + response.message());
                 }
+
+                if (best == null) best = hits.get(0);
+
+                // Eng katta mavjud URL ni qaytarish
+                // fullHDURL → largeImageURL → webformatURL
+                String fullHD = best.path("fullHDURL").asText(null);
+                if (fullHD != null && !fullHD.isBlank()) return fullHD;
+
+                String large = best.path("largeImageURL").asText(null);
+                if (large != null && !large.isBlank()) return large;
+
+                String webformat = best.path("webformatURL").asText(null);
+                if (webformat != null && !webformat.isBlank()) return webformat;
+
+                return null;
             }
         } catch (Exception e) {
-            System.err.println("Rasm qidirishda kutilmagan xatolik: " + e.getMessage());
+            System.err.println("Pixabay xatosi (" + searchText + "): " + e.getMessage());
+            return null;
         }
-
-        return "https://picsum.photos/800/600";
     }
 }
