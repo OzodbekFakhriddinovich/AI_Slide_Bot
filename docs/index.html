@@ -113,17 +113,16 @@
  
         .tpl-preview { width: 100%; height: 90px; overflow: hidden; }
  
-        .tpl-1 { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); } /* Brown History 3 */
-        .tpl-2 { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); } /* Biome (purple) */
-        .tpl-3 { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); } /* Flowers 3 */
-        .tpl-4 { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); } /* Green World */
-        .tpl-5 { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); } /* White Blue */
-        .tpl-6 { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); } /* Green Abstract */
-        .tpl-7 { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); } /* Flowers 1 */
-        .tpl-8 { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); } /* Brown History 2 */
-        .tpl-9 { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); } /* Brown History */
-        .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); } /* Snow */
-
+        .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
+        .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
+        .tpl-3  { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
+        .tpl-4  { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); }
+        .tpl-5  { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); }
+        .tpl-6  { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); }
+        .tpl-7  { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); }
+        .tpl-8  { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
+        .tpl-9  { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
+        .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); }
  
         .tpl-inner {
             width: 100%; height: 100%; padding: 8px;
@@ -342,18 +341,17 @@
     let selectedFormat   = "pptx";
  
     const templates = [
-        { name: "Brown History 3", cls: "tpl-1", tc: "#fff" },
-        { name: "Brown History 2", cls: "tpl-2", tc: "#333" },
-        { name: "Flowers 3",       cls: "tpl-3", tc: "#555" },
-        { name: "Green World",     cls: "tpl-4", tc: "#fff" },
-        { name: "Biome",           cls: "tpl-5", tc: "#fff" },
-        { name: "Green Abstract",  cls: "tpl-6", tc: "#fff" },
-        { name: "Brown History",   cls: "tpl-7", tc: "#fff" },
-        { name: "White Blue",      cls: "tpl-8", tc: "#333" },
-        { name: "Flowers 1",       cls: "tpl-9", tc: "#fff" },
-        { name: "Snow",            cls: "tpl-10", tc: "#333" }
+        { name: "Brown History 3", size: "4-5 mb", cls: "tpl-1",  tc: "#fff" },
+        { name: "Brown History 2", size: "1 mb",   cls: "tpl-2",  tc: "#333" },
+        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3",  tc: "#555" },
+        { name: "Green World",     size: "4 mb",   cls: "tpl-4",  tc: "#fff" },
+        { name: "Biome",           size: "14 MB",  cls: "tpl-5",  tc: "#fff" },
+        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6",  tc: "#fff" },
+        { name: "Brown History",   size: "10-15 MB",cls: "tpl-7", tc: "#fff" },
+        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8",  tc: "#333" },
+        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9",  tc: "#fff" },
+        { name: "Snow",            size: "10 mb",  cls: "tpl-10", tc: "#333" },
     ];
-
  
     const grid = document.getElementById('templateGrid');
     templates.forEach((t, i) => {
@@ -379,7 +377,8 @@
         grid.appendChild(card);
     });
  
-   
+    // ── AUTO-FILL NAME FROM TELEGRAM ──
+    // Priority: first_name + last_name → username → bo'sh
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
         const fullName = [tgUser.first_name, tgUser.last_name]
