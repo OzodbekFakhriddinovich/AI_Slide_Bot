@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -38,8 +40,8 @@ public class SlideFlowSingleService {
         String lang   = (user.getLanguage() != null) ? user.getLanguage() : "UZ";
 
         try {
-            String          jsonData = message.getWebAppData().getData();
-            Map<String, Object> data = objectMapper.readValue(jsonData, Map.class);
+            String              jsonData = message.getWebAppData().getData();
+            Map<String, Object> data     = objectMapper.readValue(jsonData, Map.class);
 
             String topic         = String.valueOf(data.getOrDefault("topic", "")).trim();
             String name          = String.valueOf(data.getOrDefault("name",
@@ -50,7 +52,7 @@ public class SlideFlowSingleService {
             int    cost          = parseIntSafe(data.get("tariff"), 3000);
 
             if (topic.isEmpty()) {
-                sendError(bot, chatId, lang, "Mavzu kiritilishi shart!");
+                sendError(bot, chatId, "Mavzu kiritilishi shart!");
                 return;
             }
 
@@ -58,12 +60,13 @@ public class SlideFlowSingleService {
                 String errorMsg = switch (lang) {
                     case "RU"  -> "Недостаточно средств на балансе! /buy";
                     case "ENG" -> "Insufficient balance! /buy";
-                    default    -> "Balansingizda mablag' yetarli emas! To'ldirish uchun: /buy";
+                    default    -> "Balansingizda mablag' yetarli emas! /buy";
                 };
-                sendError(bot, chatId, lang, errorMsg);
+                sendError(bot, chatId, errorMsg);
                 return;
             }
 
+            // ==================== BALANS VA PROGRESS BOSQICHI ====================
             user.setTopic(topic);
             user.setUserInfo(name);
             user.setSlideCount(String.valueOf(slideCount));
@@ -73,24 +76,29 @@ public class SlideFlowSingleService {
             user.setState(UserState.CREATING_SLIDES);
             userRepository.save(user);
 
-            sendWaitingMessage(bot, chatId, lang);
+            String balanceMsg = "💰 Balansingizdan " + cost + " so'm mablag' yechildi.";
+            sendMessage(bot, chatId, balanceMsg);
 
-            // ─── Alohida thread: AI + PPTX yaratish ───────────────────────
+            String waitingText = switch (lang) {
+                case "RU"  -> "⏳ Пожалуйста, подождите, мы готовим вашу презентацию!";
+                case "ENG" -> "⏳ Please wait, we are preparing your presentation!";
+                default    -> "⏳ Iltimos kuting, biz sizning taqdimotingizni tayyorlamoqdamiz!";
+            };
+            sendMessage(bot, chatId, waitingText);
+
+            Message progressMessage = sendProgressBar(bot, chatId);
+
             new Thread(() -> {
                 try {
-                    // 1. Gemini'dan reja (4 ta section) + slayd kontentni olish
-                    GptTextGeneratorService.GeneratedContent generated =
-                            gptService.generatePresentation(topic, slideCount, slideLanguage, cost);
+                    simulateProgress(bot, progressMessage, 120);
 
-                    List<String>                               sections = generated.sections();
-                    List<GptTextGeneratorService.SlideData>    slides   = generated.slides();
+                    List<GptTextGeneratorService.Section> sections =
+                            gptService.generateSections(topic, slideCount, slideLanguage, cost);
 
-                    // 2. PPTX yaratish (sections + slides alohida)
-                    String pptxPath = pptxService.createPptx(
-                            topic, name, "", sections, slides, templateNum
+                    String pptxPath = pptxService.createPptxFromSections(
+                            topic, name, "", sections, templateNum
                     );
 
-                    // 3. Faylni yuborish
                     File file = new File(pptxPath);
                     if (file.exists()) {
                         SendDocument doc = new SendDocument();
@@ -112,51 +120,54 @@ public class SlideFlowSingleService {
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(bot, chatId, lang, "Ma'lumotlarni qayta ishlashda xatolik yuz berdi.");
+            sendError(bot, chatId, "Ma'lumotlarni qayta ishlashda xatolik yuz berdi.");
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
+
+    private Message sendProgressBar(SlideBot bot, Long chatId) {
+        String text = "Yuklanmoqda ... 0%";
+        SendMessage msg = new SendMessage(chatId.toString(), text);
         try {
-            AnswerCallbackQuery answer = new AnswerCallbackQuery();
-            answer.setCallbackQueryId(query.getId());
-            answer.setText("Qabul qilindi");
-            bot.execute(answer);
+            return bot.execute(msg);
         } catch (Exception e) {
             e.printStackTrace();
+            return null;
         }
     }
 
-    public void handleMessage(UserEntity user, Message message, SlideBot bot) {
-        Long   chatId = message.getChatId();
-        String text   = message.getText();
+    private void simulateProgress(SlideBot bot, Message progressMsg, int totalSeconds) {
+        if (progressMsg == null) return;
 
-        if (user.getState() == UserState.WAITING_TOPIC) {
-            user.setTopic(text);
-            user.setState(UserState.WAITING_INFO);
-            userRepository.save(user);
-            send(bot, chatId, "Mavzu qabul qilindi. Endi qo'shimcha ma'lumot yuboring.");
+        int steps = 24;
+        int delay = (totalSeconds * 1000) / steps;
+
+        for (int i = 1; i <= steps; i++) {
+            int percent = Math.min(100, i * (100 / steps));
+            String bar = "█".repeat(i) + "░".repeat(steps - i);
+            String text = "Yuklanmoqda ... " + percent + "%\n" + bar;
+
+            try {
+                EditMessageText edit = new EditMessageText();
+                edit.setChatId(progressMsg.getChatId().toString());
+                edit.setMessageId(progressMsg.getMessageId());
+                edit.setText(text);
+                bot.execute(edit);
+            } catch (Exception ignored) {}
+
+            try { Thread.sleep(delay); } catch (InterruptedException ignored) {}
         }
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Yordamchi metodlar
-    // ─────────────────────────────────────────────────────────────────────────
-    private void sendWaitingMessage(SlideBot bot, Long chatId, String lang) {
-        String text = switch (lang) {
-            case "RU"  -> "🧠 ИИ создает презентацию с картинками... ⏳\nЭто займет около 1-2 минут.";
-            case "ENG" -> "🧠 AI is generating your presentation with images... ⏳\nIt will take about 1-2 minutes.";
-            default    -> "🧠 Sun'iy intellekt rasmli taqdimot tayyorlamoqda... ⏳\n1-2 daqiqa vaqt olishi mumkin.";
-        };
-        send(bot, chatId, text);
+        try {
+            bot.execute(new DeleteMessage(progressMsg.getChatId().toString(), progressMsg.getMessageId()));
+        } catch (Exception ignored) {}
     }
 
     private String getSuccessCaption(String lang, String topic, Integer balance) {
         return switch (lang) {
-            case "RU"  -> "✅ Готово!\n📊 Тема: " + topic + "\n💰 Баланс: " + balance + " сум";
-            case "ENG" -> "✅ Finished!\n📊 Topic: " + topic + "\n💰 Balance: " + balance + " UZS";
-            default    -> "✅ Tayyor!\n📊 Mavzu: " + topic + "\n💰 Qolgan balans: " + balance + " so'm";
+            case "RU"  -> "📕 Ваша презентация готова!\n\n📌 Tема: " + topic + "\n\nБот для подготовки презентаций и PDF-файлов: @AI_Slide_Assistant_Bot";
+            case "ENG" -> "📕 Your presentation is ready!\n\n📌 Topic: " + topic + "\n\nPresentation and PDF bot: @AI_Slide_Assistant_Bot";
+            default    -> "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + topic + "\n\nTaqdimot va pdf tayyorlovchi bot: @AI_Slide_Assistant_Bot";
         };
     }
 
@@ -164,9 +175,10 @@ public class SlideFlowSingleService {
         String msg = switch (lang) {
             case "RU"  -> "Произошла ошибка. Средства возвращены.";
             case "ENG" -> "Error occurred. Funds returned.";
-            default    -> "Slayd yaratishda xatolik yuz berdi. Mablag' balansingizga qaytarildi.";
+            default    -> "Xatolik yuz berdi. Mablag' balansingizga qaytarildi.";
         };
-        sendError(bot, chatId, lang, msg);
+        sendError(bot, chatId, msg);
+
         try {
             user.setBalance(user.getBalance() + cost);
             user.setState(UserState.START);
@@ -174,8 +186,16 @@ public class SlideFlowSingleService {
         } catch (Exception ignored) {}
     }
 
-    private void sendError(SlideBot bot, Long chatId, String lang, String msg) {
+    private void sendError(SlideBot bot, Long chatId, String msg) {
         send(bot, chatId, "❌ " + msg);
+    }
+
+    private void sendMessage(SlideBot bot, Long chatId, String text) {
+        try {
+            bot.execute(new SendMessage(chatId.toString(), text));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void send(SlideBot bot, Long chatId, String text) {
@@ -188,7 +208,24 @@ public class SlideFlowSingleService {
 
     private int parseIntSafe(Object val, int defaultVal) {
         if (val == null) return defaultVal;
-        try { return Integer.parseInt(String.valueOf(val)); }
-        catch (Exception e) { return defaultVal; }
+        try {
+            return Integer.parseInt(String.valueOf(val));
+        } catch (Exception e) {
+            return defaultVal;
+        }
+    }
+
+    public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
+        try {
+            AnswerCallbackQuery answer = new AnswerCallbackQuery();
+            answer.setCallbackQueryId(query.getId());
+            answer.setText("Qabul qilindi");
+            bot.execute(answer);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void handleMessage(UserEntity user, Message message, SlideBot bot) {
     }
 }

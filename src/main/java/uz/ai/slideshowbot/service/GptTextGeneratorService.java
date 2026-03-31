@@ -6,9 +6,7 @@ import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -27,153 +25,122 @@ public class GptTextGeneratorService {
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Asosiy public metod: 4 ta reja bo'limi + slideCount ta kontent slayd
-    // ─────────────────────────────────────────────────────────────────────────
-    public GeneratedContent generatePresentation(String topic, int slideCount, String language, int tariff) {
+    public List<Section> generateSections(String topic, int slideCount,
+                                          String language, int tariff) {
+        int sectionCount = slideCount <= 10 ? 3 : slideCount <= 15 ? 4 : 5;
 
-        String yearInstruction = switch (tariff) {
-            case 3000 -> "Faqat 2024-yilgacha bo'lgan ma'lumotlardan foydalangin.";
-            case 5000 -> "2024-yildan keyingi yangi ma'lumotlar, so'nggi yangiliklar va tadqiqotlarni qo'shgin.";
-            case 7000 -> "2025-2026-yillardagi eng so'nggi ma'lumotlar, statistikalar va yangiliklar asosida tayyorla.";
-            default   -> "Mavzuga mos umumiy ma'lumotlar yetarli.";
+        String yearNote = switch (tariff) {
+            case 3000 -> "Faqat 2024-yilgacha bo'lgan klassik ma'lumotlar.";
+            case 5000 -> "2025-yilgacha yangi ma'lumotlar va tadqiqotlar.";
+            case 7000 -> "2025-2026-yillardagi eng so'nggi statistikalar va yangiliklar.";
+            default   -> "Mavzuga mos umumiy ma'lumotlar.";
         };
 
-        // Til bo'yicha yo'riqnoma
         String langNote = switch (language) {
             case "RU"  -> "Barcha matnlar RUS tilida bo'lsin.";
-            case "ENG" -> "All text must be in ENGLISH.";
+            case "ENG" -> "All texts must be in ENGLISH.";
             default    -> "Barcha matnlar O'ZBEK tilida bo'lsin.";
         };
 
         String prompt = String.format("""
-            Sen professional prezentatsiya yaratuvchi AI assistantsan.
-            Mavzu: '%s'. Jami %d ta kontent slayd tayyorla. %s %s
+            Sen professional prezentatsiya tayyorlovchi AI assistantsan.
+            Mavzu: '%s'. %s %s
             
-            QOIDALAR:
-            1. sections - bu Reja sahifasi uchun FAQAT 4 ta asosiy bo'lim nomi (qisqa, aniq).
-            2. slides - bu %d ta kontent slayd. Har birida:
-               - title: slayd sarlavhasi (qisqa)
-               - bullets: 3-4 ta muhim punkt (har biri 1-2 gap)
-               - imageQuery: inglizcha rasm qidiruv so'zi (aniq, mavzuga mos, 3-5 so'z)
-            3. imageQuery matematik yoki geometrik dizaynlar bo'lsin:
-               masalan: "hexagon network diagram", "circle infographic technology",
-               "triangle data visualization", "pentagon security chart"
+            Aynan %d ta bo'lim tayyorla. Har bir bo'lim uchun:
+            - sectionTitle: bo'lim nomi (qisqa, 3-6 so'z)
+            - slide1: oddiy matn slayd → {title, bullets: aynan 4 ta punkt (har biri 1-2 gap), imageQuery}
+            - slide2: rasm+matn slayd → {title, bullets: aynan 3 ta punkt (har biri 1-2 gap), imageQuery}
+            - slide3: 3 ustunli slayd → {title, bullets: AYNAN 3 ta punkt (har biri 2-4 gap, to'liqroq)}
             
-            JAVOBNI FAQAT TOZA JSON formatida qaytar, hech qanday kod bloki yo'q:
-            {
-              "sections": ["1-bo'lim", "2-bo'lim", "3-bo'lim", "4-bo'lim"],
-              "slides": [
-                {"title": "...", "bullets": ["...", "...", "..."], "imageQuery": "..."},
-                ...
-              ]
-            }
-            """,
-                topic, slideCount, langNote, yearInstruction, slideCount);
+            imageQuery inglizcha 3-5 so'z, geometrik/texnologik: masalan "hexagon network security diagram"
+            
+            FAQAT sof JSON qaytar, ``` belgisi ISHLATMA:
+            [
+              {
+                "sectionTitle": "...",
+                "slide1": {"title":"...","bullets":["...","...","...","..."],"imageQuery":"..."},
+                "slide2": {"title":"...","bullets":["...","...","..."],"imageQuery":"..."},
+                "slide3": {"title":"...","bullets":["...","...","..."],"imageQuery":"..."}
+              }
+            ]
+            """, topic, langNote, yearNote, sectionCount);
 
         try {
-            String jsonRequest = mapper.writeValueAsString(Map.of(
-                    "contents", List.of(Map.of(
-                            "parts", List.of(Map.of("text", prompt))
-                    ))
+            String jsonReq = mapper.writeValueAsString(Map.of(
+                    "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt))))
             ));
+            RequestBody body = RequestBody.create(jsonReq, MediaType.get("application/json"));
+            Request req = new Request.Builder().url(GEMINI_URL + apiKey).post(body).build();
 
-            RequestBody body = RequestBody.create(jsonRequest, MediaType.get("application/json"));
-            Request request = new Request.Builder()
-                    .url(GEMINI_URL + apiKey)
-                    .post(body)
-                    .build();
-
-            try (Response response = client.newCall(request).execute()) {
-                String responseBody = response.body() != null ? response.body().string() : "";
-
+            try (Response response = client.newCall(req).execute()) {
+                String rb = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    System.err.println("Gemini API xatosi: " + responseBody);
-                    throw new RuntimeException("API xatosi kodi: " + response.code());
+                    System.err.println("Gemini error: " + rb);
+                    throw new RuntimeException("API error: " + response.code());
                 }
 
-                JsonNode root = mapper.readTree(responseBody);
-                JsonNode candidates = root.path("candidates");
+                JsonNode root    = mapper.readTree(rb);
+                String rawText   = root.path("candidates").get(0)
+                        .path("content").path("parts").get(0).path("text").asText();
 
-                if (candidates.isMissingNode() || candidates.size() == 0) {
-                    throw new RuntimeException("Gemini mos javob qaytarmadi.");
-                }
-
-                String content = candidates.get(0)
-                        .path("content").path("parts").get(0)
-                        .path("text").asText();
-
-                // JSON tozalash
-                String cleanJson = content.trim()
+                String clean = rawText.trim()
                         .replaceAll("(?s)```json\\s*", "")
-                        .replaceAll("```", "")
-                        .trim();
+                        .replaceAll("```", "").trim();
+                int s = clean.indexOf('['), e = clean.lastIndexOf(']');
+                if (s >= 0 && e > s) clean = clean.substring(s, e + 1);
 
-                // Faqat {...} qismini olish
-                int start = cleanJson.indexOf('{');
-                int end   = cleanJson.lastIndexOf('}');
-                if (start >= 0 && end > start) {
-                    cleanJson = cleanJson.substring(start, end + 1);
-                }
+                JsonNode arr     = mapper.readTree(clean);
+                List<Section> sections = new ArrayList<>();
 
-                JsonNode parsed = mapper.readTree(cleanJson);
+                for (JsonNode node : arr) {
+                    String secTitle = node.path("sectionTitle").asText("Bo'lim");
+                    List<SlideContent> contents = new ArrayList<>();
 
-                // sections (4 ta)
-                List<String> sections = new ArrayList<>();
-                JsonNode sectionsNode = parsed.path("sections");
-                if (sectionsNode.isArray()) {
-                    for (JsonNode s : sectionsNode) {
-                        sections.add(s.asText());
-                        if (sections.size() == 4) break;
+                    for (String key : new String[]{"slide1", "slide2", "slide3"}) {
+                        JsonNode sn = node.path(key);
+                        SlideContent sc = new SlideContent();
+                        sc.title      = sn.path("title").asText(secTitle);
+                        sc.imageQuery = sn.path("imageQuery").asText(topic + " diagram");
+                        sc.bullets    = new ArrayList<>();
+                        JsonNode bn   = sn.path("bullets");
+                        if (bn.isArray()) for (JsonNode b : bn) sc.bullets.add(b.asText());
+                        contents.add(sc);
                     }
+                    sections.add(new Section(secTitle, contents));
                 }
-                // Agar kamroq kelsa to'ldirish
-                while (sections.size() < 4) {
-                    sections.add("Bo'lim " + (sections.size() + 1));
-                }
-
-                // slides
-                List<SlideData> slides = new ArrayList<>();
-                JsonNode slidesNode = parsed.path("slides");
-                if (slidesNode.isArray()) {
-                    for (JsonNode s : slidesNode) {
-                        SlideData sd = new SlideData();
-                        sd.title      = s.path("title").asText("Sarlavha");
-                        sd.imageQuery = s.path("imageQuery").asText(topic);
-                        sd.bullets    = new ArrayList<>();
-                        JsonNode bulletsNode = s.path("bullets");
-                        if (bulletsNode.isArray()) {
-                            for (JsonNode b : bulletsNode) {
-                                sd.bullets.add(b.asText());
-                            }
-                        }
-                        slides.add(sd);
-                    }
-                }
-
-                return new GeneratedContent(sections, slides);
+                return sections;
             }
-        } catch (Exception e) {
-            System.err.println("Prezentatsiya yaratishda xatolik: " + e.getMessage());
-            throw new RuntimeException("Prezentatsiya yaratishda xatolik: " + e.getMessage());
+
+        } catch (Exception ex) {
+            System.err.println("generateSections xato: " + ex.getMessage());
+            throw new RuntimeException("Section generatsiya xatosi: " + ex.getMessage());
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Orqaga moslik uchun (eski kod uchun) - endi generatePresentation ishlatilsin
-    // ─────────────────────────────────────────────────────────────────────────
-    public List<SlideData> generateSlides(String topic, int slideCount, String language, int tariff) {
-        return generatePresentation(topic, slideCount, language, tariff).slides();
+    public List<SlideData> generateSlides(String topic, int slideCount,
+                                          String language, int tariff) {
+        List<Section> sections = generateSections(topic, slideCount, language, tariff);
+        List<SlideData> result = new ArrayList<>();
+        for (Section sec : sections) {
+            for (SlideContent sc : sec.slides()) {
+                SlideData sd = new SlideData();
+                sd.title      = sc.title;
+                sd.bullets    = sc.bullets;
+                sd.imageQuery = sc.imageQuery;
+                result.add(sd);
+            }
+        }
+        return result;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Record: Gemini javobini saqlash
-    // ─────────────────────────────────────────────────────────────────────────
-    public record GeneratedContent(List<String> sections, List<SlideData> slides) {}
+    public record Section(String title, List<SlideContent> slides) {}
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  SlideData - har bir kontent slayd ma'lumoti
-    // ─────────────────────────────────────────────────────────────────────────
+    public static class SlideContent {
+        public String       title;
+        public List<String> bullets;
+        public String       imageQuery;
+    }
+
     public static class SlideData {
         public String       title;
         public List<String> bullets;

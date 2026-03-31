@@ -26,7 +26,7 @@ public class BalanceService {
     private UserRepository userRepository;
 
     @Autowired
-    private FileRepository fileRepository; // ✅ yangi
+    private FileRepository fileRepository;
 
     public void showBalance(SlideBot bot, UserEntity user, Long chatId, Integer lastMessageId) {
         if (user.getBalance() == null) user.setBalance(4000);
@@ -78,36 +78,36 @@ public class BalanceService {
         String text1 = switch (user.getLanguage()) {
             case "RU" -> """
                     📕Презентации/Слайды цены:
-                    6-10 страниц - 4000 сум
+                    6-10 страниц - 3000 сум
                     11-15 страниц - 5000 сум
-                    16-20 страниц - 6000 сум
+                    16-20 страниц - 7000 сум
                     
                     📘Самостоятельная работа цены:
-                    до 6-10 страниц - 4000 сум
+                    до 6-10 страниц - 3000 сум
                     до 11-15 страниц - 5000 сум
-                    до 16-20 страниц - 6000 сум
+                    до 16-20 страниц - 7000 сум
                     """;
             case "ENG" -> """
                     📕Presentation/Slide prices:
-                    6-10 pages - 4000 UZS
+                    6-10 pages - 3000 UZS
                     11-15 pages - 5000 UZS
-                    16-20 pages - 6000 UZS
+                    16-20 pages - 7000 UZS
                     
                     📘Independent Work prices:
-                    up to 6-10 pages - 4000 UZS
+                    up to 6-10 pages - 3000 UZS
                     up to 6-15 pages - 5000 UZS
-                    up to 16-20 pages - 6000 UZS
+                    up to 16-20 pages - 7000 UZS
                     """;
             default -> """
                     📕Taqdimot/Slayd narxlari:
-                     6 sahifadan, 10 sahifagacha - 4000 so'm
+                     6 sahifadan, 10 sahifagacha - 3000 so'm
                     11 sahifadan, 15 sahifagacha - 5000 so'm
-                    16 sahifadan, 20 sahifagacha - 6000 so'm
+                    16 sahifadan, 20 sahifagacha - 7000 so'm
                     
                     📘Mustaqil ish narxlari:
-                    6-10 sahifagacha - 4000 so'm
+                    6-10 sahifagacha - 3000 so'm
                     11-15 sahifagacha - 5000 so'm
-                    16-20 sahifagacha - 6000 so'm
+                    16-20 sahifagacha - 7000 so'm
                     """;
         };
         sendMessage(bot, chatId, text1, null);

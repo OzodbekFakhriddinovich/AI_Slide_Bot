@@ -9,7 +9,10 @@ import org.springframework.stereotype.Service;
 import java.awt.*;
 import java.io.*;
 import java.net.URI;
+import java.util.*;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class PptxCreatorService {
@@ -17,440 +20,556 @@ public class PptxCreatorService {
     @Autowired
     private ImageSearchService imageSearchService;
 
-    private static final int SLIDE_W = 720;
-    private static final int SLIDE_H = 540;
+    private static final int W   = 960;
+    private static final int H   = 540;
+    private static final int BM  = 2;
+    private static final int BT  = 3;
+    private static final int PAD = 18;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Asosiy metod (sections + slides)
-    // ─────────────────────────────────────────────────────────────────────────
-    public String createPptx(String topic,
-                             String userName,
-                             String subjectName,
-                             List<String> sections,
-                             List<GptTextGeneratorService.SlideData> slides,
-                             String templateStr) throws IOException {
+    private static final double FS_TOPIC     = 40.0;
+    private static final double FS_NAME      = 36.0;
+    private static final double FS_REJA_HEAD = 55.0;
+    private static final double FS_REJA_ITEM = 45.0;
+    private static final double FS_HEAD      = 26.0;
+    private static final double FS_BODY      = 24.0;
 
+    private static final AtomicInteger LAYOUT_COUNTER = new AtomicInteger(0);
+    private final ExecutorService imagePool = Executors.newFixedThreadPool(5);
+
+    public String createPptxFromSections(String topic, String userName, String subjectName,
+                                         List<GptTextGeneratorService.Section> sections,
+                                         String templateStr) throws IOException {
         File dir = new File("slides");
         if (!dir.exists()) dir.mkdirs();
 
-        XMLSlideShow ppt = new XMLSlideShow();
-        ppt.setPageSize(new Dimension(SLIDE_W, SLIDE_H));
+        int           template = parseTemplate(templateStr);
+        TemplateStyle style    = getTemplateStyle(template);
+        int layout = LAYOUT_COUNTER.getAndIncrement() % 10;
 
-        int template = parseTemplate(templateStr);
-        TemplateStyle style = getTemplateStyle(template);
+        Map<Integer, byte[]> imgCache = prefetchImages(sections, topic);
+
+        XMLSlideShow ppt = new XMLSlideShow();
+        ppt.setPageSize(new Dimension(W, H));
 
         createTitleSlide(ppt, topic, userName, subjectName, style);
-        createPlanSlide(ppt, sections, style);
+        createRejaSlide(ppt, sections, style);
 
-        for (GptTextGeneratorService.SlideData data : slides) {
-            createContentSlide(ppt, data, topic, style);
+        for (int i = 0; i < sections.size(); i++) {
+            GptTextGeneratorService.Section sec = sections.get(i);
+            List<GptTextGeneratorService.SlideContent> slides = sec.slides();
+
+            createSA(ppt, sec.title(), slides, style, layout);
+
+            if (!slides.isEmpty())
+                createSB(ppt, slides.get(0), style, layout);
+
+            if (slides.size() > 1)
+                createSC(ppt, slides.get(1), style, imgCache.get(i), layout);
+
+            if (slides.size() > 2)
+                createSD(ppt, slides.get(2), style, layout);
         }
 
-        createConclusionSlide(ppt, topic, userName, style);
+        createThankYouSlide(ppt, userName, style);
 
-        String safe = topic.replaceAll("[^a-zA-Z0-9\\s]", "_").trim();
+        String safe     = topic.replaceAll("[^a-zA-Z0-9\\s]", "_").trim();
         String fileName = "slides/" + safe + "_" + System.currentTimeMillis() + ".pptx";
-
-        try (FileOutputStream out = new FileOutputStream(fileName)) {
-            ppt.write(out);
-        }
+        try (FileOutputStream out = new FileOutputStream(fileName)) { ppt.write(out); }
         ppt.close();
         return fileName;
     }
 
-    // Eski imzo (sections yo'q holat uchun)
-    public String createPptx(String topic,
-                             String userName,
-                             String subjectName,
+    public String createPptx(String topic, String userName, String subjectName,
                              List<GptTextGeneratorService.SlideData> slides,
                              String templateStr) throws IOException {
-        List<String> fallback = slides.stream().limit(4).map(s -> s.title).toList();
-        return createPptx(topic, userName, subjectName, fallback, slides, templateStr);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    //  1. SARLAVHA SLAYD
-    // ─────────────────────────────────────────────────────────────────────────
-    private void createTitleSlide(XMLSlideShow ppt, String topic,
-                                  String userName, String subjectName,
-                                  TemplateStyle style) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-
-        addDiagonalDecoration(slide, style);
-
-        XSLFTextBox titleBox = slide.createTextBox();
-        titleBox.setAnchor(new Rectangle(50, 80, 620, 220));
-        XSLFTextParagraph tp = titleBox.addNewTextParagraph();
-        tp.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.LEFT);
-        XSLFTextRun tr = tp.addNewTextRun();
-        tr.setText(topic.toUpperCase());
-        tr.setFontSize(42.0);
-        tr.setBold(true);
-        tr.setFontColor(style.titleColor);
-        tr.setFontFamily("Calibri");
-
-        XSLFTextBox infoBox = slide.createTextBox();
-        infoBox.setAnchor(new Rectangle(50, 390, 500, 45));
-        XSLFTextRun ir = infoBox.addNewTextParagraph().addNewTextRun();
-        String info = "Tayyorladi: " + userName;
-        if (subjectName != null && !subjectName.isBlank()) info += "  |  " + subjectName;
-        ir.setText(info);
-        ir.setFontSize(18.0);
-        ir.setFontColor(style.textColor);
-        ir.setFontFamily("Calibri");
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    //  2. REJA SLAYD — faqat 4 ta bo'lim
-    // ─────────────────────────────────────────────────────────────────────────
-    private void createPlanSlide(XMLSlideShow ppt, List<String> sections, TemplateStyle style) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        addDiagonalDecoration(slide, style);
-
-        XSLFTextBox titleBox = slide.createTextBox();
-        titleBox.setAnchor(new Rectangle(40, 20, 640, 70));
-        XSLFTextRun titleRun = titleBox.addNewTextParagraph().addNewTextRun();
-        titleRun.setText("REJA");
-        titleRun.setFontSize(38.0);
-        titleRun.setBold(true);
-        titleRun.setFontColor(style.titleColor);
-        titleRun.setFontFamily("Calibri");
-
-        int[] xs = {40, 380, 40, 380};
-        int[] ys = {115, 115, 315, 315};
-        int count = Math.min(4, sections.size());
-
-        for (int i = 0; i < count; i++) {
-            int bx = xs[i], by = ys[i];
-
-            // Raqam doirasi
-            XSLFAutoShape circle = slide.createAutoShape();
-            circle.setShapeType(ShapeType.ELLIPSE);
-            circle.setAnchor(new Rectangle(bx, by, 42, 42));
-            circle.setFillColor(style.titleColor);
-            circle.setLineColor(style.titleColor);
-
-            // Raqam matni
-            XSLFTextBox numBox = slide.createTextBox();
-            numBox.setAnchor(new Rectangle(bx + 11, by + 6, 22, 30));
-            XSLFTextRun numRun = numBox.addNewTextParagraph().addNewTextRun();
-            numRun.setText(String.valueOf(i + 1));
-            numRun.setFontSize(18.0);
-            numRun.setBold(true);
-            numRun.setFontColor(style.bgColor);
-            numRun.setFontFamily("Calibri");
-
-            // Bo'lim nomi
-            String title = sections.get(i);
-            if (title.length() > 55) title = title.substring(0, 52) + "...";
-            XSLFTextBox textBox = slide.createTextBox();
-            textBox.setAnchor(new Rectangle(bx + 52, by + 5, 255, 55));
-            XSLFTextRun textRun = textBox.addNewTextParagraph().addNewTextRun();
-            textRun.setText(title);
-            textRun.setFontSize(16.0);
-            textRun.setBold(true);
-            textRun.setFontColor(style.titleColor);
-            textRun.setFontFamily("Calibri");
-
-            // Pastki ajratuvchi chiziq
-            XSLFAutoShape line = slide.createAutoShape();
-            line.setShapeType(ShapeType.LINE);
-            line.setAnchor(new Rectangle(bx, by + 50, 310, 1));
-            line.setLineColor(blend(style.titleColor, style.bgColor, 0.4f));
-            line.setLineWidth(1.0);
+        List<GptTextGeneratorService.Section> sections = new ArrayList<>();
+        for (int i = 0; i < slides.size(); i += 3) {
+            List<GptTextGeneratorService.SlideContent> contents = new ArrayList<>();
+            for (int j = i; j < Math.min(i + 3, slides.size()); j++) {
+                GptTextGeneratorService.SlideData    sd = slides.get(j);
+                GptTextGeneratorService.SlideContent sc = new GptTextGeneratorService.SlideContent();
+                sc.title = sd.title; sc.bullets = sd.bullets; sc.imageQuery = sd.imageQuery;
+                contents.add(sc);
+            }
+            while (contents.size() < 3) {
+                GptTextGeneratorService.SlideContent e = new GptTextGeneratorService.SlideContent();
+                e.title = "Ma'lumot"; e.bullets = new ArrayList<>(List.of("Qo'shimcha")); e.imageQuery = topic;
+                contents.add(e);
+            }
+            sections.add(new GptTextGeneratorService.Section(contents.get(0).title, contents));
         }
+        return createPptxFromSections(topic, userName, subjectName, sections, templateStr);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  3. KONTENT SLAYD — MATN CHAP | RASM O'NG (har doim)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void createContentSlide(XMLSlideShow ppt,
-                                    GptTextGeneratorService.SlideData data,
-                                    String topic,
-                                    TemplateStyle style) throws IOException {
+    private Map<Integer, byte[]> prefetchImages(List<GptTextGeneratorService.Section> sections, String topic) {
+        Map<Integer, byte[]>         result  = new ConcurrentHashMap<>();
+        Map<Integer, Future<byte[]>> futures = new LinkedHashMap<>();
+        for (int i = 0; i < sections.size(); i++) {
+            List<GptTextGeneratorService.SlideContent> sls = sections.get(i).slides();
+            if (sls.size() <= 1) continue;
+            final int idx = i; final String q = sls.get(1).imageQuery;
+            futures.put(idx, imagePool.submit(() -> {
+                try {
+                    String url = imageSearchService.findImageUrl(q, topic);
+                    if (url == null || url.isBlank()) return null;
+                    try (InputStream is = URI.create(url).toURL().openStream()) {
+                        byte[] b = is.readAllBytes(); return b.length > 500 ? b : null;
+                    }
+                } catch (Exception e) { return null; }
+            }));
+        }
+        futures.forEach((idx, f) -> {
+            try { byte[] b = f.get(20, TimeUnit.SECONDS); if (b != null) result.put(idx, b); }
+            catch (Exception ignored) {}
+        });
+        return result;
+    }
+
+    private void createTitleSlide(XMLSlideShow ppt, String topic, String userName,
+                                  String subjectName, TemplateStyle style) {
         XSLFSlide slide = ppt.createSlide();
         slide.getBackground().setFillColor(style.bgColor);
+        textBox(slide, topic.toUpperCase(), PAD, 50, W-PAD*2, 330, FS_TOPIC, true,
+                style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+        String info = userName + (subjectName != null && !subjectName.isBlank() ? "  |  "+subjectName : "");
+        textBox(slide, info, PAD, H-110, W-PAD*2, 80, FS_NAME, false,
+                style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+        addBorder(slide);
+    }
 
-        // Chap dekorativ vertikal bar
-        XSLFAutoShape leftBar = slide.createAutoShape();
-        leftBar.setShapeType(ShapeType.RECT);
-        leftBar.setAnchor(new Rectangle(0, 0, 8, SLIDE_H));
-        leftBar.setFillColor(style.titleColor);
-        leftBar.setLineColor(style.titleColor);
+    private void createRejaSlide(XMLSlideShow ppt, List<GptTextGeneratorService.Section> sections,
+                                 TemplateStyle style) {
+        XSLFSlide slide = ppt.createSlide();
+        slide.getBackground().setFillColor(style.bgColor);
+        int count = Math.min(sections.size(), 5);
+        int titleH = 60, titleY = BM+BT+4;
+        textBox(slide, "Reja", PAD, titleY, W-PAD*2, titleH, FS_REJA_HEAD, true, style.titleColor, null);
+        int listY = titleY+titleH+2, listH = H-listY-BM-BT-4;
+        double fs = FS_REJA_ITEM;
+        if (count * fs * 1.15 > listH) fs = Math.max(18.0, (listH/count)/1.15);
+        XSLFTextBox lb = slide.createTextBox();
+        lb.setAnchor(new Rectangle(PAD, listY, W-PAD*2, listH));
+        for (int i = 0; i < count; i++) {
+            XSLFTextParagraph p = lb.addNewTextParagraph();
+            p.setSpaceBefore(0.0); p.setSpaceAfter(0.0);
+            XSLFTextRun r = p.addNewTextRun();
+            r.setText(clean(sections.get(i).title()));
+            r.setFontSize(fs); r.setBold(true);
+            r.setFontColor(style.titleColor); r.setFontFamily("Calibri");
+        }
+        addBorder(slide);
+    }
 
-        // Sarlavha
-        XSLFTextBox headBox = slide.createTextBox();
-        headBox.setAnchor(new Rectangle(18, 10, 690, 58));
-        XSLFTextRun hr = headBox.addNewTextParagraph().addNewTextRun();
-        hr.setText(data.title);
-        hr.setFontSize(26.0);
-        hr.setBold(true);
-        hr.setFontColor(style.titleColor);
-        hr.setFontFamily("Calibri");
+    private void createSA(XMLSlideShow ppt, String sectionTitle,
+                          List<GptTextGeneratorService.SlideContent> slides,
+                          TemplateStyle style, int layout) {
+        XSLFSlide slide = ppt.createSlide();
+        slide.getBackground().setFillColor(style.bgColor);
+        String title = clean(sectionTitle);
+        List<String> bullets = (!slides.isEmpty() && slides.get(0).bullets != null)
+                ? slides.get(0).bullets : new ArrayList<>();
 
-        // Sarlavha osti chiziq
-        XSLFAutoShape titleLine = slide.createAutoShape();
-        titleLine.setShapeType(ShapeType.LINE);
-        titleLine.setAnchor(new Rectangle(18, 68, 690, 1));
-        titleLine.setLineColor(style.titleColor);
-        titleLine.setLineWidth(1.5);
-
-        // MATN — CHAP TOMON
-        if (data.bullets != null) {
-            int bulletCount = Math.min(data.bullets.size(), 4);
-            int spacing = bulletCount > 3 ? 105 : 118;
-            int startY = 82;
-
-            for (int i = 0; i < bulletCount; i++) {
-                int itemY = startY + i * spacing;
-
-                // Raqam doirasi marker
-                XSLFAutoShape marker = slide.createAutoShape();
-                marker.setShapeType(ShapeType.ELLIPSE);
-                marker.setAnchor(new Rectangle(20, itemY + 1, 22, 22));
-                marker.setFillColor(style.titleColor);
-                marker.setLineColor(style.titleColor);
-
-                XSLFTextBox markerNum = slide.createTextBox();
-                markerNum.setAnchor(new Rectangle(25, itemY + 2, 14, 18));
-                XSLFTextRun mn = markerNum.addNewTextParagraph().addNewTextRun();
-                mn.setText(String.valueOf(i + 1));
-                mn.setFontSize(10.0);
-                mn.setBold(true);
-                mn.setFontColor(style.bgColor);
-
-                // Matn
-                String bullet = data.bullets.get(i);
-                if (bullet.length() > 130) bullet = bullet.substring(0, 127) + "...";
-
-                XSLFTextBox bulletBox = slide.createTextBox();
-                bulletBox.setAnchor(new Rectangle(48, itemY, 295, spacing - 4));
-                XSLFTextRun br = bulletBox.addNewTextParagraph().addNewTextRun();
-                br.setText(bullet);
-                br.setFontSize(14.0);
-                br.setFontColor(style.textColor);
-                br.setFontFamily("Calibri");
+        switch (layout) {
+            case 0 -> {
+                drawFilled(slide, ShapeType.RECT, BM+BT, BM+BT, 12, H-(BM+BT)*2, blend(style.titleColor,style.bgColor,0.3f));
+                textBox(slide, title, 32, BM+BT+8, W-46, 100, 64.0, true, style.titleColor, null);
+                bulletsBlock(slide, bullets, 32, BM+BT+118, W-46, H-BM-BT-126, FS_BODY, style);
+            }
+            case 1 -> {
+                drawFilled(slide, ShapeType.RECT, W-BM-BT-12, BM+BT, 12, H-(BM+BT)*2, blend(style.titleColor,style.bgColor,0.3f));
+                textBox(slide, title, PAD, 30, W-PAD*2-16, 180, 60.0, true, style.titleColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                bulletsBlock(slide, bullets, PAD, 215, W-PAD*2-16, H-225-BM-BT, FS_BODY, style);
+            }
+            case 2 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, 90, style.titleColor);
+                textBox(slide, title, PAD, BM+8, W-PAD*2, 76, 44.0, true, style.bgColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                bulletsBlock(slide, bullets, PAD, 98, W-PAD*2, H-106-BM-BT, FS_BODY, style);
+            }
+            case 3 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM, W/3, H-BM*2, style.titleColor);
+                textBox(slide, title, BM+8, H/2-70, W/3-16, 140, 32.0, true, style.bgColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                bulletsBlock(slide, bullets, W/3+PAD, BM+BT+PAD, W-W/3-PAD*2-BM, H-BM*2-PAD*2, FS_BODY, style);
+            }
+            case 4 -> {
+                drawFilled(slide, ShapeType.RECT, BM, H-BM-90, W-BM*2, 90, style.titleColor);
+                textBox(slide, title, PAD, BM+BT+6, W-PAD*2, 120, 56.0, true, style.titleColor, null);
+                bulletsBlock(slide, bullets, PAD, 130, W-PAD*2, H-220-BM, FS_BODY, style);
+            }
+            case 5 -> {
+                drawFilled(slide, ShapeType.RECT, W-W/3-BM, BM, W/3, H-BM*2, style.titleColor);
+                textBox(slide, title, PAD, BM+BT+10, W-W/3-PAD*2-8, 160, 52.0, true, style.titleColor, null);
+                bulletsBlock(slide, bullets, PAD, 175, W-W/3-PAD*2-8, H-183-BM-BT, FS_BODY, style);
+            }
+            case 6 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, H-BM*2, style.titleColor);
+                textBox(slide, title, PAD, BM+BT+10, W-PAD*2, 120, 56.0, true, style.bgColor, null);
+                bulletsBlock_color(slide, bullets, PAD, 140, W-PAD*2, H-148-BM-BT, FS_BODY, style.bgColor);
+            }
+            case 7 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM,     W-BM*2, 8, style.titleColor);
+                drawFilled(slide, ShapeType.RECT, BM, H-BM-8, W-BM*2, 8, style.titleColor);
+                textBox(slide, title, PAD, 16, W-PAD*2, 130, 60.0, true, style.titleColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                bulletsBlock(slide, bullets, PAD, 154, W-PAD*2, H-162-16-BM, FS_BODY, style);
+            }
+            case 8 -> {
+                textBox(slide, title, PAD, BM+BT+8, W-PAD*2, 130, 58.0, true, style.titleColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                bulletsBlock2col(slide, bullets, style);
+            }
+            default -> {
+                Color dim = blend(style.titleColor, style.bgColor, 0.75f);
+                drawFilled(slide, ShapeType.TRIANGLE, W-200, H-200, 200, 200, dim);
+                drawFilled(slide, ShapeType.ELLIPSE,  W-60,  10,    55,  55,  dim);
+                textBox(slide, title, PAD, BM+BT+8, W-PAD*2-80, 120, 58.0, true, style.titleColor, null);
+                bulletsBlock(slide, bullets, PAD, 136, W-PAD*2-80, H-144-BM-BT, FS_BODY, style);
             }
         }
-
-        // RASM — O'NG TOMON (har doim)
-        addWebImageToSlide(ppt, slide, data.imageQuery, topic,
-                new Rectangle(358, 78, 354, 450), style);
+        addBorder(slide);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  4. XULOSA SLAYD
-    // ─────────────────────────────────────────────────────────────────────────
-    private void createConclusionSlide(XMLSlideShow ppt, String topic,
-                                       String userName, TemplateStyle style) {
+    private void createSB(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
+                          TemplateStyle style, int layout) {
         XSLFSlide slide = ppt.createSlide();
         slide.getBackground().setFillColor(style.bgColor);
-        addDiagonalDecoration(slide, style);
+        List<String> bullets = content.bullets != null ? content.bullets : new ArrayList<>();
+        int cnt = Math.min(bullets.size(), 4);
 
-        XSLFTextBox box = slide.createTextBox();
-        box.setAnchor(new Rectangle(50, 160, 620, 90));
-        XSLFTextRun tr = box.addNewTextParagraph().addNewTextRun();
-        tr.setText("E'tiboringiz uchun rahmat!");
-        tr.setFontSize(38.0);
-        tr.setBold(true);
-        tr.setFontColor(style.titleColor);
-        tr.setFontFamily("Calibri");
-
-        XSLFTextBox author = slide.createTextBox();
-        author.setAnchor(new Rectangle(50, 390, 450, 40));
-        XSLFTextRun ar = author.addNewTextParagraph().addNewTextRun();
-        ar.setText(userName);
-        ar.setFontSize(20.0);
-        ar.setFontColor(style.textColor);
-        ar.setFontFamily("Calibri");
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Rasm qo'shish (URL deprecated fix + fallback)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void addWebImageToSlide(XMLSlideShow ppt, XSLFSlide slide,
-                                    String query, String topic,
-                                    Rectangle anchor, TemplateStyle style) {
-        boolean added = false;
-        try {
-            String imageUrl = imageSearchService.findImageUrl(query, topic);
-            if (imageUrl != null && !imageUrl.isBlank()) {
-                // URI.create().toURL() — deprecated URL(String) o'rniga
-                try (InputStream is = URI.create(imageUrl).toURL().openStream()) {
-                    byte[] bytes = is.readAllBytes();
-                    if (bytes.length > 1000) {
-                        PictureData.PictureType pt =
-                                imageUrl.toLowerCase().contains(".png")
-                                        ? PictureData.PictureType.PNG
-                                        : PictureData.PictureType.JPEG;
-                        XSLFPictureData pd = ppt.addPicture(bytes, pt);
-                        XSLFPictureShape pic = slide.createPicture(pd);
-                        pic.setAnchor(anchor);
-                        added = true;
+        switch (layout) {
+            case 0 -> {
+                addBoldTitle(slide, content.title, style, 50);
+                tightBulletList(slide, bullets, PAD, BM+BT+56, W-PAD*2, H-BM-BT-64, FS_BODY, style.textColor);
+            }
+            case 1 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, 56, style.titleColor);
+                textBox(slide, clean(content.title), PAD, BM+6, W-PAD*2, 44, FS_HEAD, true, style.bgColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                tightBulletList(slide, bullets, PAD, 62, W-PAD*2, H-70-BM-BT, FS_BODY, style.textColor);
+            }
+            case 2 -> {
+                addBoldTitle(slide, content.title, style, 50);
+                int sY = BM+BT+56, sH = H-sY-BM-BT-6;
+                int half = cnt/2 + cnt%2, w2 = (W-PAD*2-12)/2;
+                tightBulletList(slide, bullets.subList(0, half), PAD, sY, w2, sH, FS_BODY, style.textColor);
+                if (cnt > half) tightBulletList(slide, bullets.subList(half, cnt), PAD+w2+12, sY, w2, sH, FS_BODY, style.textColor);
+            }
+            case 3 -> {
+                addBoldTitle(slide, content.title, style, 50);
+                int sY = BM+BT+56, avH = H-sY-BM-BT-6, iH = cnt > 0 ? avH/cnt : avH;
+                Color cf = blend(style.bgColor, style.titleColor, 0.10f);
+                Color cb = blend(style.titleColor, style.bgColor, 0.40f);
+                for (int i = 0; i < cnt; i++) {
+                    int cy = sY + i*(iH+4);
+                    XSLFAutoShape box = slide.createAutoShape();
+                    box.setShapeType(ShapeType.RECT);
+                    box.setAnchor(new Rectangle(PAD, cy, W-PAD*2, iH-2));
+                    box.setFillColor(cf); box.setLineColor(cb); box.setLineWidth(1.0);
+                    drawFilled(slide, ShapeType.RECT, PAD, cy, 6, iH-2, style.titleColor);
+                    textBox(slide, clean(bullets.get(i)), PAD+14, cy+2, W-PAD*2-18, iH-6, FS_BODY, false, style.textColor, null);
+                }
+            }
+            case 4 -> {
+                addBoldTitle(slide, content.title, style, 50);
+                int sY = BM+BT+56, avH = H-sY-BM-BT-6, iH = cnt > 0 ? avH/cnt : avH;
+                for (int i = 0; i < cnt; i++) {
+                    int cy = sY + i*(iH+3);
+                    textBox(slide, String.valueOf(i+1), PAD, cy, 40, iH, 32.0, true, style.titleColor, null);
+                    textBox(slide, clean(bullets.get(i)), PAD+48, cy+2, W-PAD*2-52, iH-4, FS_BODY, false, style.textColor, null);
+                }
+            }
+            case 5 -> {
+                int tW = W/3;
+                textBox(slide, clean(content.title), W-tW-PAD, BM+BT+6, tW, H-BM-BT-12, FS_HEAD, true,
+                        style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                tightBulletList(slide, bullets, PAD, BM+BT+6, W-tW-PAD*2-12, H-BM-BT-12, FS_BODY, style.textColor);
+            }
+            case 6 -> {
+                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, H-BM*2, style.titleColor);
+                textBox(slide, clean(content.title), PAD, BM+BT+6, W-PAD*2, 52, FS_HEAD, true, style.bgColor, null);
+                tightBulletList(slide, bullets, PAD, BM+BT+60, W-PAD*2, H-BM-BT-68, FS_BODY, style.bgColor);
+            }
+            case 7 -> {
+                addBoldTitle(slide, content.title, style, 50);
+                int sY = BM+BT+56, avH = H-sY-BM-BT-6, iH = cnt > 0 ? avH/cnt : avH;
+                for (int i = 0; i < cnt; i++) {
+                    int cy = sY + i*iH;
+                    if (i > 0) drawFilled(slide, ShapeType.RECT, PAD, cy-1, W-PAD*2, 1, blend(style.titleColor,style.bgColor,0.5f));
+                    textBox(slide, clean(bullets.get(i)), PAD, cy+2, W-PAD*2, iH-4, FS_BODY, false, style.textColor, null);
+                }
+            }
+            case 8 -> {
+                textBox(slide, clean(content.title), PAD, BM+BT+6, W-PAD*2, 60, FS_HEAD, true, style.titleColor,
+                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+                tightBulletList_center(slide, bullets, PAD, BM+BT+72, W-PAD*2, H-BM-BT-80, FS_BODY, style.textColor);
+            }
+            default -> {
+                addBoldTitle(slide, content.title, style, 50);
+                if (cnt > 0) textBox(slide, clean(bullets.get(0)), PAD, BM+BT+56, W-PAD*2, 100, 28.0, true, style.titleColor, null);
+                int sY = BM+BT+162, avH = H-sY-BM-BT-6, rem = cnt-1;
+                if (rem > 0) {
+                    int iH = avH/rem;
+                    for (int i = 1; i < cnt; i++) {
+                        textBox(slide, clean(bullets.get(i)), PAD+20, sY+(i-1)*iH, W-PAD*2-24, iH-4, FS_BODY-2, false, style.textColor, null);
                     }
                 }
             }
-        } catch (Exception e) {
-            System.err.println("Rasm yuklashda xatolik: " + e.getMessage());
         }
-
-        if (!added) addFallbackShape(slide, anchor, style);
+        addBorder(slide);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Fallback: matematik shakllar (rasm yuklanmasa)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void addFallbackShape(XSLFSlide slide, Rectangle anchor, TemplateStyle style) {
-        int x = anchor.x, y = anchor.y, w = anchor.width, h = anchor.height;
-        int cx = x + w / 2, cy = y + h / 2;
-        Color accent = style.titleColor;
-        Color dim = blend(accent, style.bgColor, 0.4f);
+    private void createSC(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
+                          TemplateStyle style, byte[] imgBytes, int layout) {
+        XSLFSlide slide = ppt.createSlide();
+        slide.getBackground().setFillColor(style.bgColor);
+        List<String> bullets = content.bullets != null ? content.bullets : new ArrayList<>();
+        int cnt = Math.min(bullets.size(), 3);
+        int top = BM+BT+56, cH = H-top-BM-BT-6;
 
-        // Fon to'rtburchak
+        addBoldTitle(slide, content.title, style, 50);
+
+        Rectangle txtRect, imgRect;
+
+        if (layout % 2 == 0) {
+            txtRect = new Rectangle(PAD,     top, W/2 - 16,          cH);
+            imgRect = new Rectangle(W/2 + 8, top, W/2 - 8 - BM - BT, cH);
+        } else {
+            imgRect = new Rectangle(BM + BT, top, W/2 - 16,          cH);
+            txtRect = new Rectangle(W/2 + 8, top, W/2 - 26,          cH);
+        }
+
+        if (cnt > 0) {
+            int iH = txtRect.height / cnt;
+            for (int i = 0; i < cnt; i++) {
+                textBox(slide, clean(bullets.get(i)),
+                        txtRect.x, txtRect.y + i*iH, txtRect.width, iH-4,
+                        FS_BODY, false, style.textColor, null);
+            }
+        }
+        placeImage(ppt, slide, imgBytes, imgRect, style);
+        addBorder(slide);
+    }
+
+    private void createSD(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
+                          TemplateStyle style, int layout) {
+        XSLFSlide slide = ppt.createSlide();
+        slide.getBackground().setFillColor(style.bgColor);
+        List<String> bullets = content.bullets != null ? content.bullets : new ArrayList<>();
+        int titleH = 52;
+
+        XSLFTextBox tb = slide.createTextBox();
+        tb.setAnchor(new Rectangle(PAD, BM+BT+2, W-PAD*2, titleH));
+        XSLFTextParagraph tp = tb.addNewTextParagraph();
+        tp.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+        XSLFTextRun tr = tp.addNewTextRun();
+        tr.setText(content.title != null ? clean(content.title).toUpperCase() : "");
+        tr.setFontSize(22.0); tr.setBold(true);
+        tr.setFontColor(style.titleColor); tr.setFontFamily("Calibri");
+
+        int colY = BM+BT+titleH+4, colH = H-colY-BM-BT-4;
+        int gap = 12, colW = (W-PAD*2-gap*2)/3;
+
+        for (int i = 0; i < 3; i++) {
+            int colX = PAD + i*(colW+gap);
+            String text = i < bullets.size() ? clean(bullets.get(i)) : "";
+
+            switch (layout) {
+                case 0, 3, 6 -> {
+                    card(slide, colX, colY, colW, colH, ShapeType.RECT, style);
+                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, 8, style.titleColor);
+                    textBox(slide, text, colX+8, colY+12, colW-16, colH-16, FS_BODY, false, style.textColor, null);
+                }
+                case 1, 4, 7 -> {
+                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, colH,
+                            blend(style.titleColor, style.bgColor, i==1 ? 0.1f : i==2 ? 0.2f : 0.3f));
+                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, 6, style.titleColor);
+                    textBox(slide, text, colX+8, colY+10, colW-16, colH-14, FS_BODY, false, style.textColor, null);
+                }
+                case 2, 5, 8 -> {
+                    drawFilled(slide, ShapeType.RECT, colX, colY, 4, colH, style.titleColor);
+                    textBox(slide, text, colX+12, colY+4, colW-16, colH-8, FS_BODY, false, style.textColor, null);
+                }
+                default -> {
+                    textBox(slide, String.valueOf(i+1), colX, colY, 44, 50, 36.0, true, style.titleColor, null);
+                    drawFilled(slide, ShapeType.RECT, colX, colY+54, colW, 3, blend(style.titleColor,style.bgColor,0.4f));
+                    textBox(slide, text, colX, colY+62, colW, colH-66, FS_BODY-1, false, style.textColor, null);
+                }
+            }
+        }
+        addBorder(slide);
+    }
+
+    private void createThankYouSlide(XMLSlideShow ppt, String userName, TemplateStyle style) {
+        XSLFSlide slide = ppt.createSlide();
+        slide.getBackground().setFillColor(style.bgColor);
+        textBox(slide, "E'tiboringiz uchun rahmat!", PAD, 110, W-PAD*2, 220, 50.0, true, style.titleColor,
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+        textBox(slide, userName, PAD, H-115, W-PAD*2, 80, FS_NAME, false, style.titleColor,
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+        addBorder(slide);
+    }
+
+    private void addBoldTitle(XSLFSlide slide, String title, TemplateStyle style, int h) {
+        textBox(slide, clean(title != null ? title : ""), PAD, BM+BT+2, W-PAD*2, h, FS_HEAD, true, style.titleColor, null);
+    }
+
+    private void textBox(XSLFSlide slide, String text, int x, int y, int w, int h,
+                         double fontSize, boolean bold, Color color,
+                         org.apache.poi.sl.usermodel.TextParagraph.TextAlign align) {
+        XSLFTextBox box = slide.createTextBox();
+        box.setAnchor(new Rectangle(x, y, w, h));
+        XSLFTextParagraph p = box.addNewTextParagraph();
+        if (align != null) p.setTextAlign(align);
+        XSLFTextRun r = p.addNewTextRun();
+        r.setText(text); r.setFontSize(fontSize); r.setBold(bold);
+        r.setFontColor(color); r.setFontFamily("Calibri");
+    }
+
+    private void tightBulletList(XSLFSlide slide, List<String> bullets,
+                                 int x, int y, int w, int h, double fs, Color color) {
+        if (bullets == null || bullets.isEmpty()) return;
+        int cnt = Math.min(bullets.size(), 4);
+        XSLFTextBox lb = slide.createTextBox();
+        lb.setAnchor(new Rectangle(x, y, w, h));
+        for (int i = 0; i < cnt; i++) {
+            XSLFTextParagraph p = lb.addNewTextParagraph();
+            p.setSpaceBefore(0.0); p.setSpaceAfter(0.0);
+            XSLFTextRun r = p.addNewTextRun();
+            r.setText(clean(bullets.get(i)));
+            r.setFontSize(fs); r.setFontColor(color); r.setFontFamily("Calibri");
+        }
+    }
+
+    private void tightBulletList_center(XSLFSlide slide, List<String> bullets,
+                                        int x, int y, int w, int h, double fs, Color color) {
+        if (bullets == null || bullets.isEmpty()) return;
+        int cnt = Math.min(bullets.size(), 4);
+        XSLFTextBox lb = slide.createTextBox();
+        lb.setAnchor(new Rectangle(x, y, w, h));
+        for (int i = 0; i < cnt; i++) {
+            XSLFTextParagraph p = lb.addNewTextParagraph();
+            p.setSpaceBefore(0.0); p.setSpaceAfter(0.0);
+            p.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+            XSLFTextRun r = p.addNewTextRun();
+            r.setText(clean(bullets.get(i)));
+            r.setFontSize(fs); r.setFontColor(color); r.setFontFamily("Calibri");
+        }
+    }
+
+    private void bulletsBlock(XSLFSlide slide, List<String> bullets,
+                              int x, int y, int w, int h, double fs, TemplateStyle style) {
+        tightBulletList(slide, bullets, x, y, w, h, fs, style.textColor);
+    }
+
+    private void bulletsBlock_color(XSLFSlide slide, List<String> bullets,
+                                    int x, int y, int w, int h, double fs, Color color) {
+        tightBulletList(slide, bullets, x, y, w, h, fs, color);
+    }
+
+    private void bulletsBlock2col(XSLFSlide slide, List<String> bullets, TemplateStyle style) {
+        if (bullets == null || bullets.isEmpty()) return;
+        int cnt = Math.min(bullets.size(), 4);
+        int sY = BM+BT+140, sH = H-sY-BM-BT-10;
+        int half = cnt/2 + cnt%2, w2 = (W-PAD*2-16)/2;
+        tightBulletList(slide, bullets.subList(0, half), PAD, sY, w2, sH, FS_BODY, style.textColor);
+        if (cnt > half) tightBulletList(slide, bullets.subList(half, cnt), PAD+w2+16, sY, w2, sH, FS_BODY, style.textColor);
+    }
+
+    private void card(XSLFSlide slide, int x, int y, int w, int h, ShapeType type, TemplateStyle style) {
+        XSLFAutoShape s = slide.createAutoShape();
+        s.setShapeType(type); s.setAnchor(new Rectangle(x, y, w, h));
+        s.setFillColor(blend(style.bgColor, style.titleColor, 0.12f));
+        s.setLineColor(blend(style.titleColor, style.bgColor, 0.40f)); s.setLineWidth(1.0);
+    }
+
+    private void placeImage(XMLSlideShow ppt, XSLFSlide slide, byte[] imgBytes,
+                            Rectangle anchor, TemplateStyle style) {
+        if (imgBytes != null && imgBytes.length > 500) {
+            try {
+                XSLFPictureData  pd  = ppt.addPicture(imgBytes, PictureData.PictureType.JPEG);
+                XSLFPictureShape pic = slide.createPicture(pd);
+                pic.setAnchor(anchor); return;
+            } catch (Exception e) { System.err.println("Rasm xatosi: " + e.getMessage()); }
+        }
+        Color c1 = blend(style.titleColor, style.bgColor, 0.4f);
+        Color c2 = blend(style.titleColor, style.bgColor, 0.6f);
+        int cx = anchor.x+anchor.width/2, cy = anchor.y+anchor.height/2;
+        int r = Math.min(anchor.width, anchor.height)/3;
         XSLFAutoShape bg = slide.createAutoShape();
-        bg.setShapeType(ShapeType.RECT);
-        bg.setAnchor(anchor);
-        bg.setFillColor(blend(style.bgColor, accent, 0.08f));
-        bg.setLineColor(dim);
-        bg.setLineWidth(1.0);
-
-        // Tashqi geksagon
-        int r1 = Math.min(w, h) / 3;
-        XSLFAutoShape hex = slide.createAutoShape();
-        hex.setShapeType(ShapeType.HEXAGON);
-        hex.setAnchor(new Rectangle(cx - r1, cy - r1, r1 * 2, r1 * 2));
-        hex.setFillColor(blend(style.bgColor, accent, 0.15f));
-        hex.setLineColor(accent);
-        hex.setLineWidth(2.5);
-
-        // Ichki aylana
-        int r2 = r1 / 2;
-        XSLFAutoShape inner = slide.createAutoShape();
-        inner.setShapeType(ShapeType.ELLIPSE);
-        inner.setAnchor(new Rectangle(cx - r2, cy - r2, r2 * 2, r2 * 2));
-        inner.setFillColor(accent);
-        inner.setLineColor(accent);
-
-        // To'rtta burchak kvadrat
-        int sq = 16;
-        int[][] corners = {
-                {x + 10, y + 10},
-                {x + w - 10 - sq, y + 10},
-                {x + 10, y + h - 10 - sq},
-                {x + w - 10 - sq, y + h - 10 - sq}
-        };
-        for (int[] c : corners) {
-            XSLFAutoShape sqShape = slide.createAutoShape();
-            sqShape.setShapeType(ShapeType.RECT);
-            sqShape.setAnchor(new Rectangle(c[0], c[1], sq, sq));
-            sqShape.setFillColor(dim);
-            sqShape.setLineColor(accent);
-            sqShape.setLineWidth(1.0);
-        }
-
-        // Pastki uchburchak
-        XSLFAutoShape tri = slide.createAutoShape();
-        tri.setShapeType(ShapeType.TRIANGLE);
-        tri.setAnchor(new Rectangle(x + w - 55, y + h - 55, 45, 45));
-        tri.setFillColor(blend(accent, style.bgColor, 0.3f));
-        tri.setLineColor(accent);
-        tri.setLineWidth(1.0);
+        bg.setShapeType(ShapeType.RECT); bg.setAnchor(anchor);
+        bg.setFillColor(blend(style.bgColor,style.titleColor,0.06f));
+        bg.setLineColor(c2); bg.setLineWidth(1.0);
+        drawOutline(slide, ShapeType.HEXAGON, cx-r, cy-r, r*2, r*2, c1, 3.0);
+        drawFilled(slide, ShapeType.ELLIPSE, cx-r/2, cy-r/2, r, r, c1);
+        int sq=12;
+        drawOutline(slide,ShapeType.RECT,anchor.x+6,anchor.y+6,sq,sq,c2,1.0);
+        drawOutline(slide,ShapeType.RECT,anchor.x+anchor.width-6-sq,anchor.y+6,sq,sq,c2,1.0);
+        drawOutline(slide,ShapeType.RECT,anchor.x+6,anchor.y+anchor.height-6-sq,sq,sq,c2,1.0);
+        drawOutline(slide,ShapeType.RECT,anchor.x+anchor.width-6-sq,anchor.y+anchor.height-6-sq,sq,sq,c2,1.0);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Dekorativ diagonal (sarlavha/reja/xulosa slaydlari)
-    // ─────────────────────────────────────────────────────────────────────────
-    private void addDiagonalDecoration(XSLFSlide slide, TemplateStyle style) {
-        Color dark = blend(style.bgColor, Color.BLACK, 0.18f);
-
-        XSLFAutoShape tri1 = slide.createAutoShape();
-        tri1.setShapeType(ShapeType.TRIANGLE);
-        tri1.setAnchor(new Rectangle(380, 370, 340, 170));
-        tri1.setFillColor(dark);
-        tri1.setLineColor(dark);
-
-        XSLFAutoShape tri2 = slide.createAutoShape();
-        tri2.setShapeType(ShapeType.TRIANGLE);
-        tri2.setAnchor(new Rectangle(560, 430, 180, 120));
-        tri2.setFillColor(blend(dark, style.titleColor, 0.2f));
-        tri2.setLineColor(blend(dark, style.titleColor, 0.2f));
-
-        XSLFAutoShape circ = slide.createAutoShape();
-        circ.setShapeType(ShapeType.ELLIPSE);
-        circ.setAnchor(new Rectangle(25, 435, 75, 75));
-        circ.setFillColor(dark);
-        circ.setLineColor(dark);
+    private void addBorder(XSLFSlide slide) {
+        Color bc = Color.BLACK;
+        drawFilled(slide,ShapeType.RECT,BM,BM,W-BM*2,BT,bc);
+        drawFilled(slide,ShapeType.RECT,BM,H-BM-BT,W-BM*2,BT,bc);
+        drawFilled(slide,ShapeType.RECT,BM,BM,BT,H-BM*2,bc);
+        drawFilled(slide,ShapeType.RECT,W-BM-BT,BM,BT,H-BM*2,bc);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Rang aralash yordamchi
-    // ─────────────────────────────────────────────────────────────────────────
+    private void drawFilled(XSLFSlide slide, ShapeType type, int x, int y, int w, int h, Color fill) {
+        XSLFAutoShape s = slide.createAutoShape();
+        s.setShapeType(type); s.setAnchor(new Rectangle(x,y,w,h));
+        s.setFillColor(fill); s.setLineColor(fill);
+    }
+
+    private void drawOutline(XSLFSlide slide, ShapeType type, int x, int y, int w, int h, Color lc, double lw) {
+        XSLFAutoShape s = slide.createAutoShape();
+        s.setShapeType(type); s.setAnchor(new Rectangle(x,y,w,h));
+        s.setFillColor(new Color(0,0,0,0)); s.setLineColor(lc); s.setLineWidth(lw);
+    }
+
+    private String clean(String text) {
+        if (text == null) return "";
+        return text.replaceAll("\\*\\*([^*]*)\\*\\*","$1")
+                .replaceAll("\\*([^*]*)\\*","$1")
+                .replaceAll("__([^_]*)__","$1")
+                .replaceAll("_([^_]*)_","$1").trim();
+    }
+
     private Color blend(Color a, Color b, float ratio) {
-        float r = Math.min(1f, Math.max(0f, ratio));
-        return new Color(
-                (int) (a.getRed() * (1 - r) + b.getRed() * r),
-                (int) (a.getGreen() * (1 - r) + b.getGreen() * r),
-                (int) (a.getBlue() * (1 - r) + b.getBlue() * r)
-        );
+        float r = Math.min(1f,Math.max(0f,ratio));
+        return new Color((int)(a.getRed()*(1-r)+b.getRed()*r),
+                (int)(a.getGreen()*(1-r)+b.getGreen()*r),
+                (int)(a.getBlue()*(1-r)+b.getBlue()*r));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Template parseri
-    // ─────────────────────────────────────────────────────────────────────────
     private int parseTemplate(String t) {
-        try {
-            return Integer.parseInt(t != null ? t.trim() : "1");
-        } catch (Exception e) {
-            return 1;
-        }
+        try { return Integer.parseInt(t!=null?t.trim():"1"); } catch(Exception e){return 1;}
     }
 
-
-    private TemplateStyle getTemplateStyle(int template) {
+     private TemplateStyle getTemplateStyle(int template) {
         return switch (template) {
-            case 1 ->
-                    new TemplateStyle(new Color(110, 83, 49), new Color(245, 240, 230), new Color(50, 50, 50), 410, 100, 290, 260);   // Brown History
-            case 2 ->
-                    new TemplateStyle(new Color(181, 156, 115), new Color(40, 35, 30), new Color(230, 220, 200), 410, 100, 290, 260); // Dark Brown
-            case 3 ->
-                    new TemplateStyle(new Color(160, 120, 80), new Color(255, 248, 240), new Color(60, 50, 40), 410, 100, 290, 260);   // Flowers / Warm
-            case 4 ->
-                    new TemplateStyle(new Color(46, 99, 58), new Color(235, 245, 235), new Color(30, 50, 30), 410, 100, 290, 260);     // Green World
-            case 5 ->
-                    new TemplateStyle(new Color(74, 60, 117), new Color(245, 240, 255), new Color(50, 40, 70), 410, 100, 290, 260);     // Purple / Biome
-            case 6 ->
-                    new TemplateStyle(new Color(34, 91, 145), new Color(230, 240, 250), new Color(30, 50, 80), 410, 100, 290, 260);     // Blue Green
-            case 7 ->
-                    new TemplateStyle(new Color(14, 48, 102), new Color(240, 244, 250), new Color(30, 40, 70), 410, 100, 290, 260);     // Dark Blue
-            case 8 ->
-                    new TemplateStyle(new Color(197, 211, 224), new Color(28, 32, 40), new Color(200, 210, 220), 410, 100, 290, 260);   // White Blue (dark bg)
-            case 9 ->
-                    new TemplateStyle(new Color(28, 66, 33), new Color(240, 248, 240), new Color(40, 50, 40), 410, 100, 290, 260);       // Flowers 1
-            case 10 ->
-                    new TemplateStyle(new Color(180, 195, 210), new Color(18, 22, 35), new Color(190, 200, 220), 410, 100, 290, 260);  // Snow / Dark
-            default ->
-                    new TemplateStyle(new Color(70, 130, 180), new Color(250, 250, 250), new Color(40, 40, 40), 410, 100, 290, 260);
+            case 1  -> new TemplateStyle(Color.WHITE,           new Color(110, 83, 49),  Color.WHITE,           410,100,290,260);
+            case 2  -> new TemplateStyle(new Color(40, 40, 40), new Color(181,156,115),  new Color(50, 50, 50), 410,100,290,260);
+            case 3  -> new TemplateStyle(new Color(60, 40, 20), new Color(160,120, 80),  Color.WHITE,           410,100,290,260);
+            case 4  -> new TemplateStyle(Color.WHITE,           new Color( 46, 99, 58),  Color.WHITE,           410,100,290,260);
+            case 5  -> new TemplateStyle(Color.WHITE,           new Color( 74, 60,117),  Color.WHITE,           410,100,290,260);
+            case 6  -> new TemplateStyle(Color.WHITE,           new Color( 34, 91,145),  Color.WHITE,           410,100,290,260);
+            case 7  -> new TemplateStyle(Color.WHITE,           new Color( 14, 48,102),  Color.WHITE,           410,100,290,260);
+            case 8  -> new TemplateStyle(new Color(30, 30, 30), new Color(197,211,224),  new Color(40, 40, 40), 410,100,290,260);
+            case 9  -> new TemplateStyle(Color.WHITE,           new Color( 28, 66, 33),  Color.WHITE,           410,100,290,260);
+            case 10 -> new TemplateStyle(new Color(20, 20, 20), new Color(180,195,210),  new Color(50, 50, 50), 410,100,290,260);
+            default -> new TemplateStyle(Color.BLACK,           Color.WHITE,             Color.DARK_GRAY,       410,100,290,260);
         };
     }
-
 
     private static class TemplateStyle {
-        final Color titleColor;
-        final Color bgColor;
-        final Color textColor;
-        final int imageX, imageY, imageW, imageH;
-
-        TemplateStyle(Color title, Color bg, Color text, int x, int y, int w, int h) {
-            this.titleColor = title;
-            this.bgColor = bg;
-            this.textColor = text;
-            this.imageX = x;
-            this.imageY = y;
-            this.imageW = w;
-            this.imageH = h;
+        final Color titleColor, bgColor, textColor;
+        @SuppressWarnings("unused") final int imageX, imageY, imageW, imageH;
+        TemplateStyle(Color t, Color b, Color tx, int ix, int iy, int iw, int ih) {
+            titleColor=t; bgColor=b; textColor=tx; imageX=ix; imageY=iy; imageW=iw; imageH=ih;
         }
     }
 }
-

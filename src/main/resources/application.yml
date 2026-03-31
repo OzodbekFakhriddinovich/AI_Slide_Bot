@@ -21,15 +21,15 @@ server:
 
 telegram:
   bot:
-    token:
+    token: 8122095609:AAGxVLSwHVlD5HO5B07_p7kff3gI1Cm5uto
     username: AI_Slide_Assistant_Bot
 
 pixabay:
-  api-key:
+  api-key: 55205441-aad57135329f080c1707d2658
 
 
 gemini:
-  api-key:     # AI Studio → Gemini uchun
+  api-key: AIzaSyD2iSyHF2HwNyL1q7PRUTSZZ4b7BHQLS3I    # AI Studio → Gemini uchun
 
 logging:
   level:

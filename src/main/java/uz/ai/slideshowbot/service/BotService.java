@@ -147,20 +147,18 @@ public class BotService {
 
             String text = message.hasText() ? message.getText() : "";
 
-            if (Boolean.TRUE.equals(user.getInCheckFlow())
-                    && message.hasText()
-                    && !text.equals("/check")
-                    && !text.equals("/chek")) {
-                user.setInCheckFlow(false);
-                userRepository.save(user);
-            }
-
             if (Boolean.TRUE.equals(user.getInCheckFlow()) && (message.hasPhoto() || message.hasDocument())) {
                 balanceService.handleCheckFile(bot, user, message);
                 adminCheckService.sendCheckToAdmin(message, user, bot);
                 user.setInCheckFlow(false);
                 userRepository.save(user);
                 return true;
+            }
+
+            if (Boolean.TRUE.equals(user.getInCheckFlow()) && message.hasText()
+                    && !text.equals("/check") && !text.equals("/chek")) {
+                user.setInCheckFlow(false);
+                userRepository.save(user);
             }
 
             if (Boolean.TRUE.equals(user.getInZipFlow())) {
@@ -192,6 +190,20 @@ public class BotService {
             }
 
             if (pdfService.handlePdfFlow(update, bot, user)) return true;
+
+            if (user.getState() == UserState.START || user.getState() == null) {
+
+                if (!message.hasText()) {
+                    String errText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
+                        case "RU"  -> "❗️ Noto'g'ri buyruq. Iltimos, menyudan foydalaning yoki /start bosing.";
+                        case "ENG" -> "❗️ Invalid action. Please use the menu or press /start.";
+                        default    -> "❗️ Noto'g'ri buyruq. Menyudan foydalaning yoki /start ni bosing.";
+                    };
+
+                    sendMessage(bot, chatId, errText, mainMenuKeyboard(user.getLanguage()), false);
+                    return true;
+                }
+            }
 
             if (text.equals("/start") || text.startsWith("/start ")) {
                 if (Boolean.TRUE.equals(user.getInCheckFlow())) {
@@ -231,10 +243,10 @@ public class BotService {
                 return true;
             }
 
-            if (update.hasMessage() && update.getMessage().hasText()) {
-                Message message1 = update.getMessage();
-                Long chatId1 = message1.getChatId();
-                String text1 = message1.getText();
+            if (message.hasText()) {
+                Message message1 = message;
+                Long chatId1 = chatId;
+                String text1 = text;
 
                 UserEntity user1 = userRepository.findByChatId(chatId1).orElseGet(() -> {
                     UserEntity u = new UserEntity();

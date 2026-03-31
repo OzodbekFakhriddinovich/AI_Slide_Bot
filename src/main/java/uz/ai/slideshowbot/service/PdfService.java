@@ -54,7 +54,7 @@ public class PdfService {
             String text = msg.getText();
 
             if (text.equals("📄 PDF yaratish") || text.equals("📄 Создать PDF") || text.equals("📄 Create PDF")) {
-                tempUserImages.remove(chatId);
+                tempUserImages.put(chatId, new ArrayList<>());
                 sendMessage(bot, chatId,
                         getText("SEND_IMAGES", user.getLanguage()),
                         pdfControlKeyboard(user.getLanguage()));
@@ -76,14 +76,6 @@ public class PdfService {
 
                 byte[] pdfBytes = createPdfFromBytes(images);
                 tempUserImages.remove(chatId);
-
-                FileEntity fileEntity = new FileEntity();
-                fileEntity.setChatId(chatId);
-                fileEntity.setFileName("user_" + chatId + ".pdf");
-                fileEntity.setFileType("PDF");
-                fileEntity.setData(pdfBytes);
-                fileRepository.save(fileEntity);
-
                 showProgressAndSendPdf(bot, chatId, pdfBytes, user);
                 return true;
             }
@@ -96,9 +88,12 @@ public class PdfService {
         }
 
         if (msg.hasPhoto()) {
+            if (!tempUserImages.containsKey(chatId)) {
+                return false;
+            }
+
             try {
                 String fileId = msg.getPhoto().get(msg.getPhoto().size() - 1).getFileId();
-
                 org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(new GetFile(fileId));
                 String fileUrl = tgFile.getFileUrl(bot.getBotToken());
 
@@ -107,7 +102,7 @@ public class PdfService {
                     imageBytes = in.readAllBytes();
                 }
 
-                tempUserImages.computeIfAbsent(chatId, k -> new ArrayList<>()).add(imageBytes);
+                tempUserImages.get(chatId).add(imageBytes);
 
                 SendMessage replyMsg = new SendMessage(chatId.toString(), getText("IMAGE_SAVED", user.getLanguage()));
                 replyMsg.setReplyToMessageId(msg.getMessageId());
@@ -140,7 +135,6 @@ public class PdfService {
 
         return false;
     }
-
     private byte[] createPdfFromBytes(List<byte[]> images) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
