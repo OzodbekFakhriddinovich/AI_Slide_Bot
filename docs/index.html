@@ -7,7 +7,6 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
- 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0e1621;
@@ -15,7 +14,6 @@
             min-height: 100vh;
             padding: 20px 16px 30px;
         }
- 
         h1 {
             font-size: 21px;
             font-weight: 700;
@@ -23,9 +21,7 @@
             margin-bottom: 22px;
             line-height: 1.35;
         }
- 
         .field-group { margin-bottom: 18px; }
- 
         input[type="text"] {
             width: 100%;
             padding: 12px 14px;
@@ -40,20 +36,17 @@
         input[type="text"]:focus { border-color: #3a7bd5; }
         input::placeholder { color: #5a7080; }
         input.error-field { border-color: #e06060 !important; }
- 
         .field-hint {
             font-size: 12px;
             color: #4a8fd4;
             margin-top: 6px;
             line-height: 1.45;
         }
- 
         .field-hint-gray {
             font-size: 12px;
             color: #7a8a9a;
             margin-top: 5px;
         }
- 
         .custom-select {
             width: 100%;
             padding: 12px 36px 12px 14px;
@@ -74,15 +67,12 @@
         .custom-select option { background: #1c2733; color: #fff; }
         .custom-select:focus { border-color: #3a7bd5; }
         .custom-select.error-field { border-color: #e06060 !important; }
- 
         .section-title {
             font-size: 16px;
             font-weight: 600;
             color: #ffffff;
             margin-bottom: 14px;
         }
- 
-        /* ── HORIZONTAL SCROLL TEMPLATE ROW ── */
         .template-row {
             display: flex;
             flex-direction: row;
@@ -97,7 +87,6 @@
         .template-row::-webkit-scrollbar { height: 4px; }
         .template-row::-webkit-scrollbar-track { background: transparent; }
         .template-row::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
- 
         .tpl-card {
             background: #1c2733;
             border: 2px solid transparent;
@@ -110,46 +99,38 @@
         }
         .tpl-card.selected { border-color: #3a7bd5; }
         .tpl-card.error-tpl { border-color: #e06060; }
- 
         .tpl-preview { width: 100%; height: 90px; overflow: hidden; }
- 
-        .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
-        .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
-        .tpl-3  { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
-        .tpl-4  { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); }
-        .tpl-5  { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); }
-        .tpl-6  { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); }
-        .tpl-7  { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); }
-        .tpl-8  { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
-        .tpl-9  { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
+        .tpl-1 { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
+        .tpl-2 { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
+        .tpl-3 { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
+        .tpl-4 { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); }
+        .tpl-5 { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); }
+        .tpl-6 { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); }
+        .tpl-7 { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); }
+        .tpl-8 { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
+        .tpl-9 { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
         .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); }
- 
         .tpl-inner {
             width: 100%; height: 100%; padding: 8px;
             display: flex; flex-direction: column; gap: 3px;
         }
- 
         .tpl-label {
             font-size: 10px; color: #8a9aaa;
             text-align: center; padding: 5px 4px 7px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
- 
         .tpl-note { font-size: 12px; color: #e06060; margin-bottom: 20px; }
- 
         .err-msg {
             font-size: 12px; color: #e06060; margin-top: 5px;
             display: none; align-items: center; gap: 4px;
         }
         .err-msg.show { display: flex; }
- 
         .section-err {
             font-size: 12px; color: #e06060; margin-bottom: 10px;
             display: none; align-items: center; gap: 4px;
         }
         .section-err.show { display: flex; }
- 
-        .tariff-card {
+        .tariff-card, .format-card {
             background: #1c2733;
             border: 2px solid #2a3a4a;
             border-radius: 12px;
@@ -158,51 +139,32 @@
             cursor: pointer;
             transition: border-color 0.18s;
         }
-        .tariff-card.selected { border-color: #3a7bd5; }
- 
+        .tariff-card.selected, .format-card.selected { border-color: #3a7bd5; }
         .tariff-row {
             display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
         }
- 
         .radio {
             width: 20px; height: 20px; border-radius: 50%;
             border: 2px solid #4a5a6a;
             display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; transition: border-color 0.18s, background 0.18s;
+            flex-shrink: 0;
         }
         .tariff-card.selected .radio,
         .format-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
- 
         .radio-dot {
             width: 8px; height: 8px; border-radius: 50%;
             background: white; display: none;
         }
         .tariff-card.selected .radio-dot,
         .format-card.selected .radio-dot { display: block; }
- 
         .tariff-name { font-size: 16px; font-weight: 600; color: #fff; }
         .tariff-price { font-size: 15px; color: #8ab4e8; margin-left: 4px; }
         .tariff-stars { font-size: 14px; margin-bottom: 5px; }
         .tariff-desc { font-size: 12.5px; color: #7a8a9a; line-height: 1.5; }
- 
-        .format-card {
-            background: #1c2733;
-            border: 2px solid #2a3a4a;
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: border-color 0.18s;
-            display: flex; align-items: center; gap: 12px;
-        }
-        .format-card.selected { border-color: #3a7bd5; }
         .format-text { font-size: 15px; color: #e8e8e8; }
         .format-text span { font-weight: 700; color: #fff; }
- 
         .divider { height: 1px; background: #1e2d3d; margin: 20px 0; }
- 
         .submit-wrap { margin-top: 30px; padding-bottom: 10px; }
- 
         .submit-btn {
             width: 100%; padding: 15px; border-radius: 12px;
             border: none; background: #3a7bd5;
@@ -211,7 +173,6 @@
         }
         .submit-btn:active { opacity: 0.85; }
         .submit-btn:disabled { background: #2a4a7a; opacity: 0.6; cursor: not-allowed; }
- 
         .global-err {
             background: #2a1515; border: 1px solid #e06060;
             border-radius: 10px; padding: 12px 14px;
@@ -222,11 +183,9 @@
     </style>
 </head>
 <body>
- 
     <h1>AI orqali prezentatsiya tayyorlash.</h1>
- 
     <div class="global-err" id="globalErr"></div>
- 
+
     <div class="field-group">
         <input type="text" id="topic" maxlength="150"
                placeholder="Prezentatsiya qaysi mavzuda bo'lsin?"
@@ -236,14 +195,15 @@
         </div>
         <div class="err-msg" id="topic-err">⚠️ Mavzu kiritilishi shart!</div>
     </div>
- 
+
     <div class="field-group">
         <input type="text" id="name" maxlength="40" placeholder="Ism Familiya">
         <div class="field-hint-gray">
             Bo'sh qolsa Telegram ismingiz ishlatiladi.
         </div>
+        <div class="err-msg" id="name-err">⚠️ Ism familiya ham kiriting!</div>
     </div>
- 
+
     <div class="field-group">
         <select class="custom-select" id="language" onchange="clearErr('language')">
             <option value="" disabled selected>Tilni tanlang...</option>
@@ -257,7 +217,7 @@
         </select>
         <div class="err-msg" id="language-err">⚠️ Tilni tanlang!</div>
     </div>
- 
+
     <div class="field-group">
         <select class="custom-select" id="slideCount">
             <option value="10">10</option>
@@ -266,21 +226,18 @@
         </select>
         <div class="field-hint-gray">Taqdimotning sahifalar soni</div>
     </div>
- 
+
     <div class="divider"></div>
- 
     <div class="section-title">Prezentatsiya dizaynini tanlang</div>
     <div class="section-err" id="template-err">⚠️ Shablon tanlanmadi — bitta tanlang!</div>
- 
+    
     <!-- HORIZONTAL SCROLL ROW -->
     <div class="template-row" id="templateGrid"></div>
- 
     <div class="tpl-note">❗ 4–5-sahifalardan boshlab rasmlar ham mavjud.</div>
- 
+
     <div class="divider"></div>
- 
     <div class="section-title">Tarifni tanlang 👇</div>
- 
+    <!-- Tariff va Format qismlari o'zgarmadi -->
     <div class="tariff-card selected" id="tariff-3000" onclick="selectTariff('3000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
@@ -290,7 +247,6 @@
         <div class="tariff-stars">⭐</div>
         <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
     </div>
- 
     <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
@@ -300,7 +256,6 @@
         <div class="tariff-stars">⭐⭐</div>
         <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
     </div>
- 
     <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
@@ -310,56 +265,61 @@
         <div class="tariff-stars">⭐⭐⭐</div>
         <div class="tariff-desc">Eng kuchli model. Ilmiy manbalarga asoslangan. Tavsiya etilgan tarif.</div>
     </div>
- 
+
     <div class="divider"></div>
- 
     <div class="section-title">Fayl formatini tanlang ❗</div>
- 
     <div class="format-card selected" id="fmt-pptx" onclick="selectFormat('pptx')">
         <div class="radio"><div class="radio-dot"></div></div>
         <div class="format-text"><span>.pptx</span> — PowerPoint</div>
     </div>
- 
     <div class="format-card" id="fmt-pdf" onclick="selectFormat('pdf')">
         <div class="radio"><div class="radio-dot"></div></div>
         <div class="format-text"><span>.pdf</span> — PDF fayl</div>
     </div>
- 
+
     <div class="submit-wrap">
         <button class="submit-btn" id="submitBtn" onclick="submitForm()">
             ✅ Taqdimot yaratish
         </button>
     </div>
- 
+
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
     tg.ready();
- 
+
     let selectedTemplate = null;
-    let selectedTariff   = "3000";
-    let selectedFormat   = "pptx";
- 
+    let selectedTariff = "3000";
+    let selectedFormat = "pptx";
+
+    // ==================== SHABLON TARTIBI O'ZGARTIRILGAN =====================
+    const templateOrder = [1, 5, 3, 4, 8, 6, 9, 2, 7, 10]; // Yangi tartib
+
     const templates = [
-        { name: "Brown History 3", size: "4-5 mb", cls: "tpl-1",  tc: "#fff" },
-        { name: "Brown History 2", size: "1 mb",   cls: "tpl-2",  tc: "#333" },
-        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3",  tc: "#555" },
-        { name: "Green World",     size: "4 mb",   cls: "tpl-4",  tc: "#fff" },
-        { name: "Biome",           size: "14 MB",  cls: "tpl-5",  tc: "#fff" },
-        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6",  tc: "#fff" },
-        { name: "Brown History",   size: "10-15 MB",cls: "tpl-7", tc: "#fff" },
-        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8",  tc: "#333" },
-        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9",  tc: "#fff" },
-        { name: "Snow",            size: "10 mb",  cls: "tpl-10", tc: "#333" },
+        { name: "Brown History 3", size: "4-5 mb", cls: "tpl-1", tc: "#fff" },
+        { name: "Brown History 2", size: "1 mb", cls: "tpl-2", tc: "#333" },
+        { name: "Flowers 3", size: "5 mb", cls: "tpl-3", tc: "#555" },
+        { name: "Green World", size: "4 mb", cls: "tpl-4", tc: "#fff" },
+        { name: "Biome", size: "14 MB", cls: "tpl-5", tc: "#fff" },
+        { name: "Green Abstract", size: "1 MB", cls: "tpl-6", tc: "#fff" },
+        { name: "Brown History", size: "10-15 MB", cls: "tpl-7", tc: "#fff" },
+        { name: "White Blue", size: "2-3 mb", cls: "tpl-8", tc: "#333" },
+        { name: "Flowers 1", size: "10 mb", cls: "tpl-9", tc: "#fff" },
+        { name: "Snow", size: "10 mb", cls: "tpl-10", tc: "#333" },
     ];
- 
+
     const grid = document.getElementById('templateGrid');
-    templates.forEach((t, i) => {
-        const n = i + 1;
+
+    // Yangi tartib bo'yicha shablonlarni chiqarish
+    templateOrder.forEach((originalIndex, position) => {
+        const t = templates[originalIndex - 1];
+        const displayNumber = position + 1;   // 1 dan 10 gacha ko'rsatish uchun
+
         const card = document.createElement('div');
         card.className = 'tpl-card';
-        card.id = 'tpl-' + n;
-        card.onclick = () => selectTemplate(n);
+        card.id = 'tpl-' + displayNumber;
+        card.onclick = () => selectTemplate(displayNumber);
+
         card.innerHTML = `
             <div class="tpl-preview ${t.cls}">
                 <div class="tpl-inner">
@@ -372,27 +332,24 @@
                     <div style="width:75%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
                 </div>
             </div>
-            <div class="tpl-label">${n}. ${t.name}</div>
+            <div class="tpl-label">${displayNumber}. ${t.name}</div>
         `;
         grid.appendChild(card);
     });
- 
-    // ── AUTO-FILL NAME FROM TELEGRAM ──
-    // Priority: first_name + last_name → username → bo'sh
+
+    // Telegramdan ismni avto to'ldirish
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
         const fullName = [tgUser.first_name, tgUser.last_name]
             .filter(Boolean)
             .join(' ')
             .trim();
- 
         const displayName = fullName || tgUser.username || '';
- 
         if (displayName) {
             document.getElementById('name').value = displayName;
         }
     }
- 
+
     function selectTemplate(n) {
         document.querySelectorAll('.tpl-card').forEach(c => {
             c.classList.remove('selected', 'error-tpl');
@@ -401,19 +358,19 @@
         selectedTemplate = n;
         document.getElementById('template-err').classList.remove('show');
     }
- 
+
     function selectTariff(val) {
         document.querySelectorAll('.tariff-card').forEach(c => c.classList.remove('selected'));
         document.getElementById('tariff-' + val).classList.add('selected');
         selectedTariff = val;
     }
- 
+
     function selectFormat(val) {
         document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
         document.getElementById('fmt-' + val).classList.add('selected');
         selectedFormat = val;
     }
- 
+
     function clearErr(fieldId) {
         const field = document.getElementById(fieldId);
         const errEl = document.getElementById(fieldId + '-err');
@@ -421,38 +378,46 @@
         if (errEl) errEl.classList.remove('show');
         document.getElementById('globalErr').classList.remove('show');
     }
- 
+
     function submitForm() {
         const topic = document.getElementById('topic').value.trim();
-        const lang  = document.getElementById('language').value;
- 
+        const name = document.getElementById('name').value.trim();
+        const lang = document.getElementById('language').value;
         let hasError = false;
         const errors = [];
- 
+
+        // Mavzu tekshirish
         if (!topic) {
             document.getElementById('topic').classList.add('error-field');
             document.getElementById('topic-err').classList.add('show');
-            document.getElementById('topic').scrollIntoView({ behavior: 'smooth', block: 'center' });
             errors.push('Mavzu');
             hasError = true;
         }
- 
+
+        // Ism Familiya tekshirish (majburiy qilindi)
+        if (!name) {
+            document.getElementById('name').classList.add('error-field');
+            document.getElementById('name-err').classList.add('show');
+            errors.push('Ism Familiya');
+            hasError = true;
+        }
+
+        // Til tekshirish
         if (!lang) {
             document.getElementById('language').classList.add('error-field');
             document.getElementById('language-err').classList.add('show');
-            if (!hasError) document.getElementById('language').scrollIntoView({ behavior: 'smooth', block: 'center' });
             errors.push('Til');
             hasError = true;
         }
- 
+
+        // Shablon tekshirish
         if (selectedTemplate === null) {
             document.getElementById('template-err').classList.add('show');
             document.querySelectorAll('.tpl-card').forEach(c => c.classList.add('error-tpl'));
-            if (!hasError) document.getElementById('templateGrid').scrollIntoView({ behavior: 'smooth', block: 'center' });
             errors.push('Shablon');
             hasError = true;
         }
- 
+
         if (hasError) {
             const errEl = document.getElementById('globalErr');
             errEl.innerHTML = '⚠️ Quyidagilarni to\'liq kiriting: <strong>' + errors.join(', ') + '</strong>';
@@ -460,26 +425,19 @@
             errEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
         }
- 
+
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.textContent = '⏳ Yuborilmoqda...';
- 
-        const name = document.getElementById('name').value.trim() ||
-                     (tgUser
-                         ? ([tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || tgUser.username || 'Foydalanuvchi')
-                         : 'Foydalanuvchi');
- 
-        const slideCount = document.getElementById('slideCount').value;
- 
+
         tg.sendData(JSON.stringify({
-            topic:      topic,
-            name:       name,
-            language:   lang,
-            slideCount: slideCount,
-            template:   String(selectedTemplate),
-            tariff:     selectedTariff,
-            format:     selectedFormat
+            topic: topic,
+            name: name,
+            language: lang,
+            slideCount: document.getElementById('slideCount').value,
+            template: String(selectedTemplate),
+            tariff: selectedTariff,
+            format: selectedFormat
         }));
     }
 </script>
