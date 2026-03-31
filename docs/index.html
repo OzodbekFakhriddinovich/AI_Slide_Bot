@@ -273,6 +273,7 @@
     <div class="section-title">Prezentatsiya dizaynini tanlang</div>
     <div class="section-err" id="template-err">⚠️ Shablon tanlanmadi — bitta tanlang!</div>
  
+    <!-- HORIZONTAL SCROLL ROW -->
     <div class="template-row" id="templateGrid"></div>
  
     <div class="tpl-note">❗ 4–5-sahifalardan boshlab rasmlar ham mavjud.</div>
@@ -340,7 +341,7 @@
     let selectedTariff   = "3000";
     let selectedFormat   = "pptx";
  
-   const templates = [
+    const templates = [
         { name: "Brown History 3", cls: "tpl-1", tc: "#fff" },
         { name: "Brown History 2", cls: "tpl-2", tc: "#333" },
         { name: "Flowers 3",       cls: "tpl-3", tc: "#555" },
@@ -378,8 +379,7 @@
         grid.appendChild(card);
     });
  
-    // ── AUTO-FILL NAME FROM TELEGRAM ──
-    // Priority: first_name + last_name → username → bo'sh
+   
     const tgUser = tg.initDataUnsafe?.user;
     if (tgUser) {
         const fullName = [tgUser.first_name, tgUser.last_name]
