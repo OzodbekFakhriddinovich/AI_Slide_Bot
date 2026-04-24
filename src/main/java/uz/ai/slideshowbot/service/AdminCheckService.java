@@ -33,7 +33,6 @@ public class AdminCheckService {
 
     private final Long ADMIN_CHAT_ID = 6290351864L;
 
-
     public boolean handleAdminCallback(Update update, SlideBot bot) {
         try {
             if (update.hasCallbackQuery()) {
@@ -51,7 +50,6 @@ public class AdminCheckService {
 
                 String lang = user.getLanguage() != null ? user.getLanguage() : "UZ";
 
-                // Faqat inline buttonlarni o'chir, chek rasmi/dokumenti qolsin
                 try {
                     org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup removeBtn =
                             new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup();

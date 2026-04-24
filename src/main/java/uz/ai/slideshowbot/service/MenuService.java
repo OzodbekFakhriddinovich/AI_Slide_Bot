@@ -1,108 +1,93 @@
 package uz.ai.slideshowbot.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
-
-import java.util.ArrayList;
-import java.util.List;
+import uz.ai.slideshowbot.bot.SlideBot;
 
 @Service
 public class MenuService {
 
-    public SendMessage mainMenu(Long chatId, String lang) {
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId.toString());
-        msg.setText(switch (lang) {
+    @Autowired
+    private TelegramRawSender rawSender;
+
+    public void sendMainMenu(SlideBot bot, Long chatId, String lang) {
+        String currentLang = (lang == null) ? "UZ" : lang;
+
+        String text = switch (currentLang) {
+            case "RU" -> """
+                    Привет! Добро пожаловать в AI Презентация | Слайд | PPT | PDF Бот
+                    
+                    Я умный бот, который поможет вам подготовить презентации, визуально представить документы и управлять файлами. Я предлагаю вам следующие услуги:
+                    
+                    1. Создание слайдов – подготовка профессиональных презентаций в формате PowerPoint или других форматах.
+                    2. PDF документы – легкое преобразование изображений в формат PDF.
+                    3. Идеи для презентаций – советы по эффективной и понятной организации контента.
+                    4. Дизайн презентаций – выбор подходящего дизайна для профессионального вида слайдов.
+                    5. ZIP-архивация файлов – возможность легко конвертировать файлы в формат ZIP.
+                    6. Создать тест – автоматическая генерация тестов по любой теме (5000 сум).
+                    7. Создать реферат – подготовка рефератов в формате Word (скоро).
+                    
+                    /balance — ваш баланс в кошельке бота. Если вы новый участник, у вас есть бонус 4000 сум.
+                    /buy — раздел покупок.
+                    """;
+
+            case "ENG" -> """
+                    Hello! Welcome to AI Presentation | Slide | PPT | PDF Bot
+                    
+                    I am an intelligent bot that helps you prepare presentations, visually present documents, and manage files. I offer you the following services:
+                    
+                    1. Create slides – prepare professional presentations in PowerPoint or other formats.
+                    2. PDF documents – easily convert images to PDF format.
+                    3. Presentation ideas – tips on organizing content effectively and clearly.
+                    4. Presentation design – choosing a suitable design for professional-looking slides.
+                    5. Zip files – the ability to easily convert files to ZIP format.
+                    6. Create Test – auto-generate tests on any topic (5,000 UZS).
+                    7. Create Essay – prepare essays in Word format (coming soon).
+                    
+                    /balance is your balance in the bot wallet. If you are a new member, you have a 4000 sum bonus.
+                    /buy purchase section.
+                    """;
+
+            default -> """
+                    Salom AI Taqdimot | Slayd | PPT | PDF Bot ga xush kelibsiz
+                    
+                    Men taqdimot tayyorlash, hujjatlarni vizual tarzda taqdim etish va fayllarni boshqarish bo'yicha yordam beradigan aqlli botman. Sizga quyidagi xizmatlarni taqdim etaman:
+                    
+                    1. Slaydlar yaratish – PowerPoint yoki boshqa formatlarda professional taqdimotlar tayyorlash.
+                    2. PDF hujjatlar – Rasmlarni osongina PDF formatiga o'zgartirish.
+                    3. Taqdimot g'oyalari – Kontentni samarali va tushunarli tarzda tashkil qilish bo'yicha maslahatlar.
+                    4. Taqdimot dizayni – Professional ko'rinishga ega slaydlar uchun mos dizayn tanlash.
+                    5. Fayllarni zip qilish – Fayllarni osongina zip formatiga o'zgartirish imkoniyati.
+                    6. Test tayyorlash – Istalgan mavzuda avtomatik test yaratish (5,000 so'm).
+                    7. Referat tayyorlash – Word formatida referat tayyorlash (tez orada qo'shiladi).
+                    
+                    /balance sizning bot hamyonidagi balansingiz. Agar yangi a'zo bo'lgan bo'lsangiz sizda 4000 so'm bonus bor.
+                    /buy xarid bo'limi
+                    """;
+        };
+
+        rawSender.sendColoredMainMenu(bot, chatId.toString(), text, currentLang);
+    }
+
+    public void sendLanguageSelector(SlideBot bot, Long chatId) {
+        String text = """
+                🇺🇿 Tilni tanlang
+                🇷🇺 Выберите язык
+                🇺🇸 Choose language:
+                """;
+
+        rawSender.sendColoredLanguageMenu(bot, chatId.toString(), text);
+    }
+
+    public void sendSimpleMenu(SlideBot bot, Long chatId, String lang) {
+        String currentLang = (lang == null) ? "UZ" : lang;
+        String text = switch (currentLang) {
             case "RU" -> "🏠 Главное меню";
             case "ENG" -> "🏠 Main menu";
             default -> "🏠 Asosiy menyu";
-        });
+        };
 
-        ReplyKeyboardMarkup keyboard = new ReplyKeyboardMarkup();
-        keyboard.setResizeKeyboard(true);
-
-        KeyboardRow r1 = new KeyboardRow();
-        r1.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "📄 PDF создать";
-            case "ENG" -> "📄 Create PDF";
-            default -> "📄 PDF yaratish";
-        }));
-        r1.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "📦 Zip файлы";
-            case "ENG" -> "📦 Zip files";
-            default -> "📦 Fayllarni Zip qilish";
-        }));
-
-        KeyboardRow r2 = new KeyboardRow();
-        r2.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "🎞️ Создать презентацию";
-            case "ENG" -> "🎞️ Create Presentation";
-            default -> "🎞️ Taqdimot yaratish";
-        }));
-        r2.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "🌐 Настройки языка";
-            case "ENG" -> "🌐 Language settings";
-            default -> "🌐 Til sozlamalari";
-        }));
-
-        KeyboardRow r3 = new KeyboardRow();
-        r3.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "📄 Word <--> PDF";
-            case "ENG" -> "📄 Word <--> PDF";
-            default -> "📄 Word <--> PDF";
-        }));
-        r3.add(new KeyboardButton(switch (lang) {
-            case "RU" -> "💰 Баланс";
-            case "ENG" -> "💰 Balance";
-            default -> "💰 Balans";
-        }));
-
-        List<KeyboardRow> rows = new ArrayList<>();
-        rows.add(r1); rows.add(r2); rows.add(r3);
-
-        keyboard.setKeyboard(rows);
-        msg.setReplyMarkup(keyboard);
-        return msg;
+        rawSender.sendColoredMainMenu(bot, chatId.toString(), text, currentLang);
     }
-
-    public SendMessage getSlideCountKeyboardMessage(Long chatId, String lang, String text) {
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId.toString());
-        msg.setText(text);
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        String button1 = switch (lang) {
-            case "RU" -> "6–10 слайдов – 4000 сум";
-            case "ENG" -> "6–10 slides – 4000 soum";
-            default -> "6–10 sahifa – 4000 so'm";
-        };
-        String button2 = switch (lang) {
-            case "RU" -> "11–15 слайдов – 5000 сум";
-            case "ENG" -> "11–15 slides – 5000 soum";
-            default -> "11–15 sahifa – 5000 so'm";
-        };
-        String button3 = switch (lang) {
-            case "RU" -> "16–20 слайдов – 6000 сум";
-            case "ENG" -> "16–20 slides – 6000 soum";
-            default -> "16–20 sahifa – 6000 so'm";
-        };
-
-        rows.add(List.of(InlineKeyboardButton.builder().text(button1).callbackData("SLIDE_COUNT_10").build()));
-        rows.add(List.of(InlineKeyboardButton.builder().text(button2).callbackData("SLIDE_COUNT_15").build()));
-        rows.add(List.of(InlineKeyboardButton.builder().text(button3).callbackData("SLIDE_COUNT_20").build()));
-
-        markup.setKeyboard(rows);
-        msg.setReplyMarkup(markup);
-        return msg;
-    }
-
-
 
 }

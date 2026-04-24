@@ -23,6 +23,7 @@ import uz.ai.slideshowbot.entity.FileEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
 import uz.ai.slideshowbot.repository.FileRepository;
 import uz.ai.slideshowbot.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.*;
 import java.net.URL;
@@ -33,10 +34,16 @@ import java.util.*;
 @Service
 public class PdfService {
 
+    @Autowired
+    private MenuService menuService;
+
     private final UserRepository userRepository;
 
     @Autowired
     private FileRepository fileRepository;
+
+    @Autowired
+    private TelegramRawSender rawSender;
 
     private final Map<Long, List<byte[]>> tempUserImages = new HashMap<>();
 
@@ -55,22 +62,20 @@ public class PdfService {
 
             if (text.equals("📄 PDF yaratish") || text.equals("📄 Создать PDF") || text.equals("📄 Create PDF")) {
                 tempUserImages.put(chatId, new ArrayList<>());
-                sendMessage(bot, chatId,
-                        getText("SEND_IMAGES", user.getLanguage()),
-                        pdfControlKeyboard(user.getLanguage()));
+                sendColoredPdfControl(bot, chatId, getText("SEND_IMAGES", user.getLanguage()), user.getLanguage());
                 return true;
             }
 
             if (text.equals("✅ Tasdiqlash") || text.equals("✅ Подтвердить") || text.equals("✅ Confirm")) {
+                if (!tempUserImages.containsKey(chatId)) return false;
                 List<byte[]> images = tempUserImages.get(chatId);
                 if (images == null || images.isEmpty()) {
-                    sendMessage(bot, chatId,
-                            switch (user.getLanguage()) {
-                                case "RU" -> "⚠️ Вы еще не отправили изображение!";
-                                case "ENG" -> "⚠️ You haven't sent an image yet!";
-                                default -> "⚠️ Siz hali rasm yubormadingiz!";
-                            },
-                            pdfControlKeyboard(user.getLanguage()));
+                    String warning = switch (user.getLanguage()) {
+                        case "RU" -> "⚠️ Вы еще не отправили изображение!";
+                        case "ENG" -> "⚠️ You haven't sent an image yet!";
+                        default -> "⚠️ Siz hali rasm yubormadingiz!";
+                    };
+                    sendColoredPdfControl(bot, chatId, warning, user.getLanguage());
                     return true;
                 }
 
@@ -80,61 +85,80 @@ public class PdfService {
                 return true;
             }
 
-            if (text.equals("◀️ Orqaga") || text.equals("◀️ Назад") || text.equals("◀️ Back")) {
+            if (text.equals("◀️ Orqaga") || text.equals("◀️ Наzad") || text.equals("◀️ Back") || text.equals("◀️ Назад")) {
+                if (!tempUserImages.containsKey(chatId)) return false;
                 tempUserImages.remove(chatId);
-                sendMessage(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
+                menuService.sendSimpleMenu(bot, chatId, user.getLanguage());
                 return true;
             }
         }
 
         if (msg.hasPhoto()) {
-            if (!tempUserImages.containsKey(chatId)) {
-                return false;
-            }
+            if (!tempUserImages.containsKey(chatId)) return false;
 
             try {
-                String fileId = msg.getPhoto().get(msg.getPhoto().size() - 1).getFileId();
-                org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(new GetFile(fileId));
-                String fileUrl = tgFile.getFileUrl(bot.getBotToken());
+                List<PhotoSize> photos = msg.getPhoto();
+                String fileId = photos.stream()
+                        .max(Comparator.comparing(PhotoSize::getFileSize))
+                        .map(PhotoSize::getFileId)
+                        .orElse(null);
 
-                byte[] imageBytes;
-                try (InputStream in = new URL(fileUrl).openStream()) {
-                    imageBytes = in.readAllBytes();
+                if (fileId != null) {
+                    GetFile getFile = new GetFile();
+                    getFile.setFileId(fileId);
+                    org.telegram.telegrambots.meta.api.objects.File file = bot.execute(getFile);
+
+                    URL url = new URL("https://api.telegram.org/file/bot" + bot.getBotToken() + "/" + file.getFilePath());
+                    try (InputStream is = url.openStream()) {
+                        byte[] imageBytes = is.readAllBytes();
+                        tempUserImages.get(chatId).add(imageBytes);
+
+                        String confirmBtnText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
+                            case "RU" -> "✅ Подтвердить";
+                            case "ENG" -> "✅ Confirm";
+                            default -> "✅ Tasdiqlash";
+                        };
+
+                        rawSender.sendReplyWithColoredBtn(
+                                bot,
+                                chatId.toString(),
+                                msg.getMessageId(),
+                                getText("IMAGE_SAVED", user.getLanguage()),
+                                confirmBtnText,
+                                "success"
+                        );
+                    }
                 }
-
-                tempUserImages.get(chatId).add(imageBytes);
-
-                SendMessage replyMsg = new SendMessage(chatId.toString(), getText("IMAGE_SAVED", user.getLanguage()));
-                replyMsg.setReplyToMessageId(msg.getMessageId());
-                replyMsg.setReplyMarkup(pdfControlKeyboard(user.getLanguage()));
-                bot.execute(replyMsg);
-
             } catch (Exception e) {
                 e.printStackTrace();
-                SendMessage errorMsg = new SendMessage(chatId.toString(), getText("ERROR", user.getLanguage()));
-                errorMsg.setReplyToMessageId(msg.getMessageId());
-                errorMsg.setReplyMarkup(pdfControlKeyboard(user.getLanguage()));
-                bot.execute(errorMsg);
+                sendColoredPdfControl(bot, chatId, getText("ERROR", user.getLanguage()), user.getLanguage());
             }
             return true;
         }
-
-        if (msg.hasDocument() || msg.hasAudio() || msg.hasVideo() || msg.hasVoice() || msg.hasSticker()) {
-            String warnText = switch (user.getLanguage()) {
-                case "RU" -> "❌ Только изображения принимаются для PDF!\nОтправьте фото, а не другие файлы!";
-                case "ENG" -> "❌ Only images are accepted for PDF!\nPlease send a photo, not other files!";
-                default -> "❌ Faqat rasm yuboring!\nBoshqa fayllar PDF uchun qabul qilinmaydi!";
-            };
-
-            SendMessage warnMsg = new SendMessage(chatId.toString(), warnText);
-            warnMsg.setReplyToMessageId(msg.getMessageId());
-            warnMsg.setReplyMarkup(pdfControlKeyboard(user.getLanguage()));
-            try { bot.execute(warnMsg); } catch (Exception ignored) {}
-            return true;
-        }
-
         return false;
     }
+
+    private void sendColoredPdfControl(SlideBot bot, Long chatId, String text, String lang) {
+        String confirmBtn = switch (lang) {
+            case "RU" -> "✅ Подтвердить";
+            case "ENG" -> "✅ Confirm";
+            default -> "✅ Tasdiqlash";
+        };
+        String backBtn = switch (lang) {
+            case "RU" -> "◀️ Назад";
+            case "ENG" -> "◀️ Back";
+            default -> "◀️ Orqaga";
+        };
+
+        rawSender.sendColoredBinaryMenu(
+                bot,
+                chatId.toString(),
+                text,
+                confirmBtn, "success",
+                backBtn, "danger"
+        );
+    }
+
     private byte[] createPdfFromBytes(List<byte[]> images) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
@@ -153,117 +177,6 @@ public class PdfService {
             e.printStackTrace();
         }
         return baos.toByteArray();
-    }
-
-    private void showProgressAndSendPdf(SlideBot bot, Long chatId, byte[] pdfBytes, UserEntity user) {
-        try {
-            SendMessage emojiMsg = new SendMessage(chatId.toString(), "📝");
-            bot.execute(emojiMsg);
-
-            SendMessage progressMsg = new SendMessage(chatId.toString(),
-                    getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜");
-            Message sentProgress = bot.execute(progressMsg);
-
-            int totalSteps = 4;
-            for (int i = 1; i <= totalSteps; i++) {
-                StringBuilder bar = new StringBuilder();
-                for (int j = 0; j < totalSteps; j++) {
-                    bar.append(j < i ? "🟩" : "⬜");
-                }
-                EditMessageText edit = new EditMessageText();
-                edit.setChatId(chatId.toString());
-                edit.setMessageId(sentProgress.getMessageId());
-                edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
-                bot.execute(edit);
-                Thread.sleep(60);
-            }
-
-            bot.execute(new DeleteMessage(chatId.toString(), sentProgress.getMessageId()));
-
-            String botLink = "https://t.me/AI_Slide_Assistant_Bot";
-            String encodedUrl = URLEncoder.encode(botLink, StandardCharsets.UTF_8);
-            String fullShareUrl = "https://t.me/share/url?url=" + encodedUrl;
-
-            InlineKeyboardButton shareBtn = new InlineKeyboardButton();
-            shareBtn.setText(switch (user.getLanguage()) {
-                case "RU" -> "📤 Поделиться";
-                case "ENG" -> "📤 Share";
-                default -> "📤 Ulashish";
-            });
-            shareBtn.setUrl(fullShareUrl);
-
-            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-            markup.setKeyboard(List.of(List.of(shareBtn)));
-
-            String pdfName = "document_" + chatId + ".pdf";
-
-            SendDocument sendDoc = new SendDocument();
-            sendDoc.setChatId(chatId.toString());
-            sendDoc.setDocument(new InputFile(new ByteArrayInputStream(pdfBytes), pdfName));
-            sendDoc.setCaption(getText("PDF_READY", user.getLanguage()));
-            sendDoc.setReplyMarkup(markup);
-            bot.execute(sendDoc);
-
-            sendMessage(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void sendMessage(SlideBot bot, Long chatId, String text, ReplyKeyboard keyboard) {
-        try {
-            SendMessage msg = new SendMessage(chatId.toString(), text);
-            if (keyboard != null) msg.setReplyMarkup(keyboard);
-            bot.execute(msg);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private ReplyKeyboard pdfControlKeyboard(String lang) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        List<KeyboardRow> rows = new ArrayList<>();
-        KeyboardRow r1 = new KeyboardRow();
-        KeyboardRow r2 = new KeyboardRow();
-        switch (lang) {
-            case "RU" -> { r1.add("✅ Подтвердить"); r2.add("◀️ Назад"); }
-            case "ENG" -> { r1.add("✅ Confirm"); r2.add("◀️ Back"); }
-            default -> { r1.add("✅ Tasdiqlash"); r2.add("◀️ Orqaga"); }
-        }
-        rows.add(r1);
-        rows.add(r2);
-        markup.setKeyboard(rows);
-        markup.setResizeKeyboard(true);
-        return markup;
-    }
-
-    private ReplyKeyboard mainMenuKeyboard(String lang) {
-        List<KeyboardRow> rows = new ArrayList<>();
-        KeyboardRow r1 = new KeyboardRow();
-        KeyboardRow r2 = new KeyboardRow();
-        KeyboardRow r3 = new KeyboardRow();
-        switch (lang) {
-            case "RU" -> {
-                r1.add("📄 Создать PDF"); r1.add("📦 Архивировать файлы (Zip)");
-                r2.add("🎞️ Создать презентацию"); r2.add("🌐 Язык");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Баланс");
-            }
-            case "ENG" -> {
-                r1.add("📄 Create PDF"); r1.add("📦 Zip Files");
-                r2.add("🎞️ Create Presentation"); r2.add("🌐 Language Settings");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Balance");
-            }
-            default -> {
-                r1.add("📄 PDF yaratish"); r1.add("📦 Fayllarni Zip qilish");
-                r2.add("🎞️ Taqdimot yaratish"); r2.add("🌐 Til Sozlamalari");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Balans");
-            }
-        }
-        rows.add(r1); rows.add(r2); rows.add(r3);
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup(rows);
-        markup.setResizeKeyboard(true);
-        return markup;
     }
 
     private String getText(String key, String lang) {
@@ -300,5 +213,44 @@ public class PdfService {
             };
             default -> "";
         };
+    }
+
+    private void showProgressAndSendPdf(SlideBot bot, Long chatId, byte[] pdfBytes, UserEntity user) {
+        try {
+            SendMessage progressMsg = new SendMessage(chatId.toString(),
+                    getText("PLEASE_WAIT", user.getLanguage()) + "\n░░░░░░░░░░ 0%");
+            Message sentProgress = bot.execute(progressMsg);
+
+            String[] bars = { "███░░░░░░░ 30%", "██████░░░░ 60%", "██████████ 100%" };
+            for (String bar : bars) {
+                Thread.sleep(1000);
+                try {
+                    EditMessageText edit = new EditMessageText();
+                    edit.setChatId(chatId.toString());
+                    edit.setMessageId(sentProgress.getMessageId());
+                    edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
+                    bot.execute(edit);
+                } catch (Exception ignored) {}
+            }
+
+            bot.execute(new DeleteMessage(chatId.toString(), sentProgress.getMessageId()));
+
+            String botLink = "https://t.me/AI_Slide_Assistant_Bot";
+            String shareUrl = "https://t.me/share/url?url=" + URLEncoder.encode(botLink, StandardCharsets.UTF_8);
+            String btnText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
+                case "RU" -> "📤 Поделиться";
+                case "ENG" -> "📤 Share";
+                default -> "📤 Ulashish";
+            };
+            String caption = getText("PDF_READY", user.getLanguage());
+            String pdfName = "document_" + chatId + ".pdf";
+
+            rawSender.sendDocumentWithStyledBtn(bot, chatId.toString(), pdfBytes, pdfName,
+                    caption, btnText, shareUrl, "success");
+
+            menuService.sendSimpleMenu(bot, chatId, user.getLanguage());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

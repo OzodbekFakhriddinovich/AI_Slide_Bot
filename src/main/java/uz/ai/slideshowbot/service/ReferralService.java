@@ -20,6 +20,9 @@ public class ReferralService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TelegramRawSender rawSender;
+
     private String generateReferralCode(UserEntity user) {
         if (user.getReferralCode() == null) {
             user.setReferralCode("ref_" + user.getChatId());
@@ -63,23 +66,20 @@ public class ReferralService {
             String encodedLink = URLEncoder.encode(refLink, StandardCharsets.UTF_8);
             String shareUrl = "https://t.me/share/url?url=" + encodedLink;
 
-            InlineKeyboardButton shareBtn = new InlineKeyboardButton();
-            shareBtn.setText(switch (user.getLanguage()) {
+            String btnText = switch (user.getLanguage()) {
                 case "RU" -> "📤 Do'stlarga yuborish";
                 case "ENG" -> "📤 Share with friends";
                 default -> "📤 Do'stlarga ulashish";
-            });
-            shareBtn.setUrl(shareUrl);
+            };
 
-            InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(List.of(shareBtn)));
-
-            SendMessage sendMessage = new SendMessage();
-            sendMessage.setChatId(chatId.toString());
-            sendMessage.setText(messageText);
-            sendMessage.setReplyMarkup(markup);
-            sendMessage.setParseMode("HTML");
-
-            bot.execute(sendMessage);
+            rawSender.sendMessageWithStyledBtn(
+                    bot,
+                    chatId.toString(),
+                    messageText,
+                    btnText,
+                    shareUrl,
+                    "danger"
+            );
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -93,9 +93,7 @@ public class ReferralService {
 
     public void handleReferralJoin(SlideBot bot, UserEntity newUser, String refCode) {
         try {
-            if (refCode == null || !refCode.startsWith("ref_")) {
-                return;
-            }
+            if (refCode == null || !refCode.startsWith("ref_")) return;
 
             Long referrerId;
             try {
@@ -104,33 +102,19 @@ public class ReferralService {
                 return;
             }
 
-            if (referrerId.equals(newUser.getChatId())) {
-                return;
+            if (referrerId.equals(newUser.getChatId())) return;
+
+            if (newUser.getReferrerId() == null) {
+                Optional<UserEntity> optionalReferrer = userRepository.findByChatId(referrerId);
+                if (optionalReferrer.isPresent()) {
+                    newUser.setReferrerId(referrerId);
+                    userRepository.save(newUser);
+                }
             }
 
-            Optional<UserEntity> optionalReferrer = userRepository.findByChatId(referrerId);
-
-            if (optionalReferrer.isPresent() && newUser.getReferrerId() == null) {
-                UserEntity referrer = optionalReferrer.get();
-
-                newUser.setReferrerId(referrerId);
-                userRepository.save(newUser);
-
-                referrer.setBalance(referrer.getBalance() + 1000);
-                userRepository.save(referrer);
-
-                String notifyText = switch (referrer.getLanguage()) {
-                    case "RU" -> "✅ Новый пользователь присоединился по вашей ссылке! +1000 сум на баланс.";
-                    case "ENG" -> "✅ New user joined via your link! +1000 som added to balance.";
-                    default ->
-                            "✅ Yangi foydalanuvchi sizning havolangiz orqali qo'shildi! +1000 so'm balansga qo'shildi.";
-                };
-
-                SendMessage notify = new SendMessage(referrerId.toString(), notifyText);
-                bot.execute(notify);
-            }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 }

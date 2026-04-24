@@ -38,6 +38,12 @@ public class ZipService {
     @Autowired
     private FileRepository fileRepository;
 
+    @Autowired
+    private TelegramRawSender rawSender;
+
+    @Autowired
+    private MenuService menuService;
+
     public void handleFile(Update update, SlideBot bot, UserEntity user) {
         if (update == null || !update.hasMessage() || user == null) return;
 
@@ -54,10 +60,26 @@ public class ZipService {
             Document doc = msg.getDocument();
             fileId = doc.getFileId();
             fileName = doc.getFileName() != null ? doc.getFileName() : "file_" + System.currentTimeMillis();
+
+            if (doc.getFileSize() > 200 * 1024 * 1024) {
+                rawSender.sendReplyWithColoredBtn(
+                        bot, chatId.toString(), msg.getMessageId(),
+                        "❌ Fayl hajmi 200 MB dan oshmasligi kerak! Maksimal 200 MB.",
+                        "◀️ Orqaga", "danger"
+                );
+                return;
+            }
         } else {
-            sendReply(bot, chatId, msg.getMessageId(),
+            String backBtnText = switch (user.getLanguage()) {
+                case "RU" -> "◀️ Назад";
+                case "ENG" -> "◀️ Back";
+                default -> "◀️ Orqaga";
+            };
+            rawSender.sendReplyWithColoredBtn(
+                    bot, chatId.toString(), msg.getMessageId(),
                     getInvalidFileText(user.getLanguage()),
-                    zipBackKeyboard(user.getLanguage()));
+                    backBtnText, "danger"
+            );
             return;
         }
 
@@ -80,15 +102,29 @@ public class ZipService {
                 fileEntity.setData(fileBytes);
                 fileRepository.save(fileEntity);
 
-                sendReply(bot, chatId, msg.getMessageId(),
+                String zipBtnText = switch (user.getLanguage()) {
+                    case "RU" -> "📦 Создать ZIP";
+                    case "ENG" -> "📦 Create ZIP";
+                    default -> "📦 ZIP yaratish";
+                };
+                rawSender.sendReplyWithColoredBtn(
+                        bot, chatId.toString(), msg.getMessageId(),
                         getFileSavedText(user.getLanguage()),
-                        zipButtonKeyboard(user.getLanguage()));
+                        zipBtnText, "success"
+                );
 
             } catch (Exception e) {
                 e.printStackTrace();
-                sendReply(bot, chatId, msg.getMessageId(),
+                String backBtnText = switch (user.getLanguage()) {
+                    case "RU" -> "◀️ Назад";
+                    case "ENG" -> "◀️ Back";
+                    default -> "◀️ Orqaga";
+                };
+                rawSender.sendReplyWithColoredBtn(
+                        bot, chatId.toString(), msg.getMessageId(),
                         getErrorText(user.getLanguage()),
-                        zipBackKeyboard(user.getLanguage()));
+                        backBtnText, "danger"
+                );
             }
         });
     }
@@ -103,70 +139,65 @@ public class ZipService {
                 .toList();
 
         if (files.isEmpty()) {
-            send(bot, chatId, getNoFilesText(user), zipBackKeyboard(user.getLanguage()));
+            rawSender.sendWithColoredBtn(bot, chatId.toString(), getNoFilesText(user), getBackBtnText(user.getLanguage()), "danger");
             return;
         }
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                SendMessage emojiMsg = new SendMessage(chatId.toString(), "⏳");
-                bot.execute(emojiMsg);
+        final List<FileEntity> finalFiles = files;
+        final Long finalChatId = chatId;
 
-                SendMessage progressMsg = new SendMessage(chatId.toString(),
-                        getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜");
+        new Thread(() -> {
+            try {
+                SendMessage progressMsg = new SendMessage(finalChatId.toString(),
+                        getText("PLEASE_WAIT", user.getLanguage()) + "\n░░░░░░░░░░ 0%");
                 Message sentProgress = bot.execute(progressMsg);
 
-                int totalSteps = 4;
-                for (int i = 1; i <= totalSteps; i++) {
-                    StringBuilder bar = new StringBuilder();
-                    for (int j = 0; j < totalSteps; j++) {
-                        bar.append(j < i ? "🟩" : "⬜");
-                    }
-                    EditMessageText edit = new EditMessageText();
-                    edit.setChatId(chatId.toString());
-                    edit.setMessageId(sentProgress.getMessageId());
-                    edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
-                    bot.execute(edit);
-                    Thread.sleep(300);
+                String[] bars = {
+                        "██░░░░░░░░ 20%",
+                        "████░░░░░░ 40%",
+                        "██████░░░░ 60%",
+                        "████████░░ 80%",
+                        "██████████ 100%"
+                };
+                for (String bar : bars) {
+                    Thread.sleep(800);
+                    try {
+                        EditMessageText edit = new EditMessageText();
+                        edit.setChatId(finalChatId.toString());
+                        edit.setMessageId(sentProgress.getMessageId());
+                        edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
+                        bot.execute(edit);
+                    } catch (Exception ignored) {}
                 }
 
-                byte[] zipBytes = createZipFromEntities(files);
+                byte[] zipBytes = createZipFromEntities(finalFiles);
 
-                bot.execute(new DeleteMessage(chatId.toString(), sentProgress.getMessageId()));
+                bot.execute(new DeleteMessage(finalChatId.toString(), sentProgress.getMessageId()));
 
-                String fullShareUrl = "https://t.me/share/url?url=" +
+                String shareUrl = "https://t.me/share/url?url=" +
                         URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", StandardCharsets.UTF_8);
-
-                InlineKeyboardButton shareBtn = new InlineKeyboardButton();
-                shareBtn.setText(switch (user.getLanguage()) {
+                String btnText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
                     case "RU" -> "📤 Поделиться";
                     case "ENG" -> "📤 Share";
                     default -> "📤 Ulashish";
-                });
-                shareBtn.setUrl(fullShareUrl);
+                };
+                String zipCaption = getText("ZIP_READY", user.getLanguage());
+                String zipName = "archive_" + finalChatId + ".zip";
 
-                InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(List.of(shareBtn)));
+                rawSender.sendDocumentWithStyledBtn(bot, finalChatId.toString(), zipBytes, zipName,
+                        zipCaption, btnText, shareUrl, "primary");
 
-                String zipName = "archive_" + chatId + "_" + System.currentTimeMillis() + ".zip";
-                SendDocument sendDoc = new SendDocument();
-                sendDoc.setChatId(chatId.toString());
-                sendDoc.setDocument(new InputFile(new ByteArrayInputStream(zipBytes), zipName));
-                sendDoc.setCaption(getText("ZIP_READY", user.getLanguage()));
-                sendDoc.setReplyMarkup(markup);
-                bot.execute(sendDoc);
-
-                clearUserZipData(chatId);
-
-                send(bot, chatId, getText("MAIN_MENU", user.getLanguage()), mainMenuKeyboard(user.getLanguage()));
-
+                clearUserZipData(finalChatId);
+                menuService.sendSimpleMenu(bot, finalChatId, user.getLanguage());
                 user.setInZipFlow(false);
                 userRepository.save(user);
 
             } catch (Exception e) {
                 e.printStackTrace();
-                send(bot, chatId, getErrorText(user.getLanguage()), zipBackKeyboard(user.getLanguage()));
+                rawSender.sendWithColoredBtn(bot, finalChatId.toString(),
+                        getErrorText(user.getLanguage()), getBackBtnText(user.getLanguage()), "danger");
             }
-        });
+        }).start();
     }
 
     private byte[] createZipFromEntities(List<FileEntity> files) throws IOException {
@@ -185,27 +216,6 @@ public class ZipService {
     public void clearUserZipData(Long chatId) {
         if (chatId == null) return;
         fileRepository.deleteByChatId(chatId);
-    }
-
-    private void sendReply(SlideBot bot, Long chatId, Integer messageId, String text, ReplyKeyboard keyboard) {
-        try {
-            SendMessage msg = new SendMessage(chatId.toString(), text);
-            msg.setReplyToMessageId(messageId);
-            if (keyboard != null) msg.setReplyMarkup(keyboard);
-            bot.execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void send(SlideBot bot, Long chatId, String text, ReplyKeyboard keyboard) {
-        try {
-            SendMessage msg = new SendMessage(chatId.toString(), text);
-            if (keyboard != null) msg.setReplyMarkup(keyboard);
-            bot.execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
     }
 
     private Long getChatId(Update update) {
@@ -238,19 +248,6 @@ public class ZipService {
         };
     }
 
-    public ReplyKeyboard zipButtonKeyboard(String lang) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        KeyboardRow row = new KeyboardRow();
-        row.add(switch (lang) {
-            case "RU" -> "📦 Создать ZIP";
-            case "ENG" -> "📦 Create ZIP";
-            default -> "📦 ZIP yaratish";
-        });
-        markup.setKeyboard(List.of(row));
-        markup.setResizeKeyboard(true);
-        return markup;
-    }
-
     public ReplyKeyboard zipBackKeyboard(String lang) {
         ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
         KeyboardRow row = new KeyboardRow();
@@ -260,35 +257,6 @@ public class ZipService {
             default -> "◀️ Orqaga";
         });
         markup.setKeyboard(List.of(row));
-        markup.setResizeKeyboard(true);
-        return markup;
-    }
-
-    private ReplyKeyboard mainMenuKeyboard(String lang) {
-        List<KeyboardRow> rows = new ArrayList<>();
-        KeyboardRow r1 = new KeyboardRow();
-        KeyboardRow r2 = new KeyboardRow();
-        KeyboardRow r3 = new KeyboardRow();
-
-        switch (lang) {
-            case "RU" -> {
-                r1.add("📄 Создать PDF"); r1.add("📦 Архивировать файлы (Zip)");
-                r2.add("🎞️ Создать презентацию"); r2.add("🌐 Язык");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Баланс");
-            }
-            case "ENG" -> {
-                r1.add("📄 Create PDF"); r1.add("📦 Zip Files");
-                r2.add("🎞️ Create Presentation"); r2.add("🌐 Language Settings");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Balance");
-            }
-            default -> {
-                r1.add("📄 PDF yaratish"); r1.add("📦 Fayllarni Zip qilish");
-                r2.add("🎞️ Taqdimot yaratish"); r2.add("🌐 Til Sozlamalari");
-                r3.add("📄 Word <--> PDF"); r3.add("💰 Balans");
-            }
-        }
-        rows.add(r1); rows.add(r2); rows.add(r3);
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup(rows);
         markup.setResizeKeyboard(true);
         return markup;
     }
@@ -319,6 +287,14 @@ public class ZipService {
                 default -> "🏠 Asosiy menyu";
             };
             default -> key;
+        };
+    }
+
+    public String getBackBtnText(String lang) {
+        return switch (lang != null ? lang : "UZ") {
+            case "RU" -> "◀️ Назад";
+            case "ENG" -> "◀️ Back";
+            default -> "◀️ Orqaga";
         };
     }
 }

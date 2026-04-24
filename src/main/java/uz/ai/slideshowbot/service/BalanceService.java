@@ -28,11 +28,20 @@ public class BalanceService {
     @Autowired
     private FileRepository fileRepository;
 
+    @Autowired
+    private TelegramRawSender rawSender;
+
+    private String lang(UserEntity user) {
+        return (user.getLanguage() != null) ? user.getLanguage() : "UZ";
+    }
+
     public void showBalance(SlideBot bot, UserEntity user, Long chatId, Integer lastMessageId) {
         if (user.getBalance() == null) user.setBalance(4000);
         userRepository.save(user);
 
-        String text = switch (user.getLanguage()) {
+        String language = lang(user);
+
+        String text = switch (language) {
             case "RU" -> "💰 Ваш баланс: " + user.getBalance() + " сум\n" +
                     "/buy - Пополнить баланс💵\n" +
                     "/referal - Приглашайте друзей и пополняйте баланс🔗";
@@ -44,16 +53,11 @@ public class BalanceService {
                     "/referal - do'stlarni taklif qilib balansni to'ldirish🔗";
         };
 
-        InlineKeyboardButton payBtn = new InlineKeyboardButton();
-        payBtn.setText(switch (user.getLanguage()) {
+        String btnText = switch (language) {
             case "RU" -> "💳 Оплатить";
             case "ENG" -> "💳 Pay";
             default -> "💳 To'lov qilish";
-        });
-        payBtn.setCallbackData("BALANCE_PAY");
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        markup.setKeyboard(List.of(List.of(payBtn)));
+        };
 
         if (lastMessageId != null) {
             try {
@@ -62,9 +66,15 @@ public class BalanceService {
             }
         }
 
-        Integer newMessageId = sendMessage(bot, chatId, text, markup);
-        user.setLastBalanceMessageId(newMessageId);
-        userRepository.save(user);
+        rawSender.sendMessageWithStyledCallbackBtn(
+                bot,
+                chatId.toString(),
+                text,
+                btnText,
+                "BALANCE_PAY",
+                "success"
+        );
+
     }
 
     public void handleBuy(SlideBot bot, UserEntity user, Long chatId, Integer lastBalanceMessageId) {
@@ -75,7 +85,9 @@ public class BalanceService {
             }
         }
 
-        String text1 = switch (user.getLanguage()) {
+        String language = lang(user);
+
+        String text1 = switch (language) {
             case "RU" -> """
                     📕Презентации/Слайды цены:
                     6-10 страниц - 3000 сум
@@ -112,33 +124,32 @@ public class BalanceService {
         };
         sendMessage(bot, chatId, text1, null);
 
-        String text2 = switch (user.getLanguage()) {
+        String text2 = switch (language) {
             case "RU" -> """
                     Пожалуйста, оплачивайте только следующие суммы:
-                    - 2 000 сум
                     - 3 000 сум
                     - 5 000 сум
                     * Оплатите 10 000 сум → получите +2 000 сум бонус🎁
                     * Оплатите 20 000 сум → получите +5 000 сум бонус🎁
                     * Оплатите 50 000 сум → получите +15 000 сум бонус🎁
                     
-                    Переведите оплату на карту ниже и сделайте скриншот чека:
+                    Переведите оплату на kartu ниже и сделайте скриншот чека:
                     (Нажмите на номер карты, чтобы скопировать)
                     
-                    💳 9860040102530439 (HUMO)
+                    💳 HUMO Card:
+                    <code>9860 3501 4654 8903</code>
                     👤 JALILOV OZODBEK
                     
                     ❕ Если возникли проблемы с оплатой на эту карту, воспользуйтесь одной из следующих:
-                    💳 9860350146548903 (HUMO)
-                    👤 JALILOV OZODBEK
-                    💳 4916990311256090 (VISA)
+                    
+                    💳 VISA Card:
+                    <code>4916 9903 1125 6090</code>
                     👤 JALILOV OZODBEK
                     
                     🧾 После оплаты отправьте команду /chek или нажмите кнопку ниже👇
                     """;
             case "ENG" -> """
                     Please pay only the following amounts:
-                    - 2,000 UZS
                     - 3,000 UZS
                     - 5,000 UZS
                     * Pay 10,000 UZS → get +2,000 UZS bonus🎁
@@ -148,20 +159,20 @@ public class BalanceService {
                     Send payment to the card below and take a screenshot of the receipt:
                     (Tap on the card number to copy it)
                     
-                    💳 9860040102530439 (HUMO)
+                    💳 HUMO Card:
+                    <code>9860 3501 4654 8903</code>
                     👤 JALILOV OZODBEK
                     
                     ❕ If you have trouble paying to this card, use one of the following:
-                    💳 9860350146548903 (HUMO)
-                    👤 JALILOV OZODBEK
-                    💳 4916990311256090 (VISA)
+                    
+                    💳 VISA Card:
+                    <code>4916 9903 1125 6090</code>
                     👤 JALILOV OZODBEK
                     
                     🧾 After payment, send /chek command or press the button below👇
                     """;
             default -> """
                     Iltimos faqat ushbu summalar miqdorida to'lov qiling:
-                    - 2 000 so'm
                     - 3 000 so'm
                     - 5 000 so'm
                     * 10 000 so'm to'lov qilsangiz, +2000 so'm bonus🎁
@@ -170,36 +181,40 @@ public class BalanceService {
                     
                     Quyidagi karta raqamiga to'lov qiling va chekni skrenshot qilib oling:
                     (COPY qilish uchun karta raqam ustiga bosing).
-                    💳 9860040102530439  (HUMO)
+                    
+                    💳 HUMO Card:
+                    <code>9860 3501 4654 8903</code>
                     👤 JALILOV OZODBEK
                     
                     ❕ushbu kartaga to'lov qilishda muammo bo'lsa, quyidagi kartalardan biriga to'lov qiling:
-                    💳 9860350146548903  (HUMO)
-                    👤 JALILOV OZODBEK
                     
-                    💳 4916990311256090  (VISA)
+                    💳 VISA Card:
+                    <code>4916 9903 1125 6090</code>
                     👤 JALILOV OZODBEK
-                    
                     
                     🧾 To'lov qilganingizdan so'ng /chek buyrug'ini yuboring yoki quyidagi tugmani bosing👇
                     """;
         };
 
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        InlineKeyboardButton checkBtn = new InlineKeyboardButton();
-        checkBtn.setText(switch (user.getLanguage()) {
+        String checkBtnText = switch (language) {
             case "RU" -> "📝 Отправить чек";
             case "ENG" -> "📝 Send check";
             default -> "📝 Chekni yuborish";
-        });
-        checkBtn.setCallbackData("SEND_CHECK");
-        markup.setKeyboard(List.of(List.of(checkBtn)));
+        };
 
-        sendMessage(bot, chatId, text2, markup);
+        rawSender.sendMessageWithStyledCallbackBtn(
+                bot,
+                chatId.toString(),
+                text2,
+                checkBtnText,
+                "SEND_CHECK",
+                "primary"
+        );
     }
 
     public void handleCheckFlow(SlideBot bot, UserEntity user, Long chatId) {
-        String text = switch (user.getLanguage()) {
+        String language = lang(user);
+        String text = switch (language) {
             case "RU" -> "📨 Пожалуйста, отправьте скриншот или файл чека:";
             case "ENG" -> "📨 Please send a screenshot or file of your payment check:";
             default -> "📨 To'lov qilganingizni tasdiqlovchi chekni skrenshotini yoki faylini yuboring:";

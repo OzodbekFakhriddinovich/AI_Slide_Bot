@@ -21,7 +21,7 @@ public class UserEntity {
 
     private String language;
 
-    private Integer balance = 4000;
+    private Integer balance = 0;
 
     private String photoFileId;
 
@@ -64,7 +64,77 @@ public class UserEntity {
 
     private String subjectName;
 
+    private Boolean referralBonusGiven = false;
 
+    @Column(name = "referral_bonus_count", nullable = false)
+    private Integer referralBonusCount = 0;
+
+    @Column(name = "in_test_flow")
+    private Boolean inTestFlow = false;
+
+    @Column(name = "test_topic")
+    private String testTopic;
+
+    @Column(name = "test_question_count")
+    private Integer testQuestionCount;
+
+    @Column(name = "test_difficulty")
+    private String testDifficulty;
+
+    @Column(name = "last_test_count_msg_id")
+    private Integer lastTestCountMsgId;
+
+    @Column(name = "last_test_input_msg_id")
+    private Integer lastTestInputMsgId;
+
+    @Column(name = "last_test_diff_msg_id")
+    private Integer lastTestDiffMsgId;
+
+    @Column(name = "in_word_pdf_flow")
+    private Boolean inWordPdfFlow = false;
+
+    @Column(name = "word_pdf_pending_file_id")
+    private Long wordPdfPendingFileId;
+
+    @Column(name = "last_warning_time")
+    private java.time.LocalDateTime lastWarningTime;
+
+    public java.time.LocalDateTime getLastWarningTime() { return lastWarningTime; }
+    public void setLastWarningTime(java.time.LocalDateTime lastWarningTime)
+    { this.lastWarningTime = lastWarningTime; }
+
+    public Boolean getInWordPdfFlow() { return inWordPdfFlow; }
+    public void setInWordPdfFlow(Boolean inWordPdfFlow) { this.inWordPdfFlow = inWordPdfFlow; }
+
+    public Long getWordPdfPendingFileId() { return wordPdfPendingFileId; }
+    public void setWordPdfPendingFileId(Long wordPdfPendingFileId) { this.wordPdfPendingFileId = wordPdfPendingFileId; }
+
+    public Boolean getInTestFlow() { return inTestFlow; }
+    public void setInTestFlow(Boolean inTestFlow) { this.inTestFlow = inTestFlow; }
+
+    public String getTestTopic() { return testTopic; }
+    public void setTestTopic(String testTopic) { this.testTopic = testTopic; }
+
+    public Integer getTestQuestionCount() { return testQuestionCount; }
+    public void setTestQuestionCount(Integer testQuestionCount) { this.testQuestionCount = testQuestionCount; }
+
+    public String getTestDifficulty() { return testDifficulty; }
+    public void setTestDifficulty(String testDifficulty) { this.testDifficulty = testDifficulty; }
+
+    public Integer getLastTestCountMsgId() { return lastTestCountMsgId; }
+    public void setLastTestCountMsgId(Integer lastTestCountMsgId) { this.lastTestCountMsgId = lastTestCountMsgId; }
+
+    public Integer getLastTestInputMsgId() { return lastTestInputMsgId; }
+    public void setLastTestInputMsgId(Integer lastTestInputMsgId) { this.lastTestInputMsgId = lastTestInputMsgId; }
+
+    public Integer getLastTestDiffMsgId() { return lastTestDiffMsgId; }
+    public void setLastTestDiffMsgId(Integer lastTestDiffMsgId) { this.lastTestDiffMsgId = lastTestDiffMsgId; }
+
+    public Integer getReferralBonusCount() { return referralBonusCount; }
+    public void setReferralBonusCount(Integer referralBonusCount) { this.referralBonusCount = referralBonusCount; }
+
+    public Boolean getReferralBonusGiven() { return referralBonusGiven; }
+    public void setReferralBonusGiven(Boolean referralBonusGiven) { this.referralBonusGiven = referralBonusGiven; }
 
     public Boolean getInPdfFlow() { return inPdfFlow; }
     public void setInPdfFlow(Boolean inPdfFlow) { this.inPdfFlow = inPdfFlow; }

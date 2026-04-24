@@ -19,18 +19,15 @@ import uz.ai.slideshowbot.repository.UserRepository;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class SlideFlowSingleService {
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private GptTextGeneratorService gptService;
-
-    @Autowired
-    private PptxCreatorService pptxService;
+    @Autowired private UserRepository userRepository;
+    @Autowired private GptTextGeneratorService gptService;
+    @Autowired private PptxCreatorService pptxService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -52,180 +49,162 @@ public class SlideFlowSingleService {
             int    cost          = parseIntSafe(data.get("tariff"), 3000);
 
             if (topic.isEmpty()) {
-                sendError(bot, chatId, "Mavzu kiritilishi shart!");
+                sendMsg(bot, chatId, "❌ Mavzu kiritilishi shart!");
                 return;
             }
 
             if (user.getBalance() == null || user.getBalance() < cost) {
-                String errorMsg = switch (lang) {
-                    case "RU"  -> "Недостаточно средств на балансе! /buy";
-                    case "ENG" -> "Insufficient balance! /buy";
-                    default    -> "Balansingizda mablag' yetarli emas! /buy";
-                };
-                sendError(bot, chatId, errorMsg);
+                sendMsg(bot, chatId, switch (lang) {
+                    case "RU"  -> "❌ Недостаточно средств! /buy";
+                    case "ENG" -> "❌ Insufficient balance! /buy";
+                    default    -> "❌ Balansingizda mablag' yetarli emas! /buy";
+                });
                 return;
             }
 
-            // ==================== BALANS VA PROGRESS BOSQICHI ====================
-            user.setTopic(topic);
-            user.setUserInfo(name);
-            user.setSlideCount(String.valueOf(slideCount));
-            user.setTemplate(slideLanguage);
-            user.setLastSelectedTemplateNumber(parseIntSafe(templateNum, 1));
             user.setBalance(user.getBalance() - cost);
             user.setState(UserState.CREATING_SLIDES);
             userRepository.save(user);
 
-            String balanceMsg = "💰 Balansingizdan " + cost + " so'm mablag' yechildi.";
-            sendMessage(bot, chatId, balanceMsg);
+            sendMsg(bot, chatId, "💰 Balansingizdan " + cost + " so'm yechildi.");
+            sendMsg(bot, chatId, switch (lang) {
+                case "RU"  -> "⏳ Подождите! Готовим презентацию...";
+                case "ENG" -> "⏳ Please wait! Preparing presentation...";
+                default    -> "⏳ Kuting! Taqdimot tayyorlanmoqda...";
+            });
 
-            String waitingText = switch (lang) {
-                case "RU"  -> "⏳ Пожалуйста, подождите, мы готовим вашу презентацию!";
-                case "ENG" -> "⏳ Please wait, we are preparing your presentation!";
-                default    -> "⏳ Iltimos kuting, biz sizning taqdimotingizni tayyorlamoqdamiz!";
-            };
-            sendMessage(bot, chatId, waitingText);
-
-            Message progressMessage = sendProgressBar(bot, chatId);
+            Message progressMsg = sendProgressBar(bot, chatId);
 
             new Thread(() -> {
-                try {
-                    simulateProgress(bot, progressMessage, 120);
+                CountDownLatch               latch      = new CountDownLatch(1);
+                AtomicReference<String>      pptxRef    = new AtomicReference<>(null);
+                AtomicReference<Exception>   errRef     = new AtomicReference<>(null);
 
-                    List<GptTextGeneratorService.Section> sections =
-                            gptService.generateSections(topic, slideCount, slideLanguage, cost);
+                Thread progressThread = new Thread(() -> {
+                    final int TOTAL_SECONDS = 60;
+                    final int STEPS = 30;
+                    final int DELAY_MS = TOTAL_SECONDS * 1000 / STEPS;
 
-                    String pptxPath = pptxService.createPptxFromSections(
-                            topic, name, "", sections, templateNum
-                    );
+                    String label = switch (lang) {
+                        case "RU"  -> "⏳ Taqdimot tayyorlanmoqda...";
+                        case "ENG" -> "⏳ Preparing presentation...";
+                        default    -> "⏳ Taqdimot tayyorlanmoqda...";
+                    };
 
-                    File file = new File(pptxPath);
-                    if (file.exists()) {
-                        SendDocument doc = new SendDocument();
-                        doc.setChatId(chatId.toString());
-                        doc.setDocument(new InputFile(file));
-                        doc.setCaption(getSuccessCaption(lang, topic, user.getBalance()));
-                        bot.execute(doc);
-                        file.delete();
+                    for (int i = 1; i <= STEPS; i++) {
+                        if (latch.getCount() == 0) break;
+
+                        int percent = (i * 100) / STEPS;
+                        String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
+                                + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+
+                        try {
+                            EditMessageText e = new EditMessageText();
+                            e.setChatId(chatId.toString());
+                            e.setMessageId(progressMsg.getMessageId());
+                            e.setText(label + "\n" + bar + " " + percent + "%");
+                            bot.execute(e);
+                        } catch (Exception ignored) {}
+
+                        try { Thread.sleep(DELAY_MS); }
+                        catch (InterruptedException ex) { break; }
                     }
 
-                    user.setState(UserState.START);
-                    userRepository.save(user);
+                    try {
+                        bot.execute(new DeleteMessage(chatId.toString(), progressMsg.getMessageId()));
+                    } catch (Exception ignored) {}
+                });
 
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    handleCreationError(bot, chatId, lang, cost, user);
+                Thread workThread = new Thread(() -> {
+                    try {
+                        List<GptTextGeneratorService.Section> sections =
+                                gptService.generateSections(topic, slideCount, slideLanguage, cost);
+                        String path = pptxService.createPptxFromSections(
+                                topic, name, "", sections, templateNum);
+                        pptxRef.set(path);
+                    } catch (Exception e) {
+                        errRef.set(e);
+                        e.printStackTrace();
+                    } finally {
+                        latch.countDown();
+                        progressThread.interrupt();
+                    }
+                });
+
+                progressThread.setDaemon(true);
+                progressThread.start();
+                workThread.start();
+
+                try { latch.await(); } catch (InterruptedException ignored) {}
+                try { progressThread.join(3000); } catch (InterruptedException ignored) {}
+
+                if (errRef.get() != null) {
+                    sendMsg(bot, chatId, switch (lang) {
+                        case "RU"  -> "❌ Произошла ошибка. Средства возвращены.";
+                        case "ENG" -> "❌ Error occurred. Funds returned.";
+                        default    -> "❌ Xatolik yuz berdi. Mablag' qaytarildi.";
+                    });
+                    user.setBalance(user.getBalance() + cost);
+                } else {
+                    String path = pptxRef.get();
+                    if (path != null) {
+                        File file = new File(path);
+                        if (file.exists()) {
+                            try {
+                                SendDocument doc = new SendDocument();
+                                doc.setChatId(chatId.toString());
+                                doc.setDocument(new InputFile(file));
+                                doc.setCaption(switch (lang) {
+                                    case "RU"  -> "📕 Ваша презентация готова!\n\n📌 Тема: " + topic + "\n\nБот для презентаций и PDF: @AI_Slide_Assistant_Bot";
+                                    case "ENG" -> "📕 Your presentation is ready!\n\n📌 Topic: " + topic + "\n\nPresentation and PDF bot: @AI_Slide_Assistant_Bot";
+                                    default    -> "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + topic + "\n\nTaqdimot va pdf tayyorlovchi bot: @AI_Slide_Assistant_Bot";
+                                });
+                                bot.execute(doc);
+                                file.delete();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                sendMsg(bot, chatId, "❌ Fayl yuborishda xatolik.");
+                                user.setBalance(user.getBalance() + cost);
+                            }
+                        }
+                    }
                 }
+
+                user.setState(UserState.START);
+                userRepository.save(user);
+
             }).start();
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(bot, chatId, "Ma'lumotlarni qayta ishlashda xatolik yuz berdi.");
+            sendMsg(bot, chatId, "❌ Ma'lumotlarni qayta ishlashda xatolik.");
         }
     }
-
 
     private Message sendProgressBar(SlideBot bot, Long chatId) {
-        String text = "Yuklanmoqda ... 0%";
-        SendMessage msg = new SendMessage(chatId.toString(), text);
         try {
-            return bot.execute(msg);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+            return bot.execute(new SendMessage(chatId.toString(),
+                    "⏳ Yuklanmoqda ... 0%\n░░░░░░░░░░░░░░░░░░░░"));
+        } catch (Exception e) { return null; }
     }
 
-    private void simulateProgress(SlideBot bot, Message progressMsg, int totalSeconds) {
-        if (progressMsg == null) return;
-
-        int steps = 24;
-        int delay = (totalSeconds * 1000) / steps;
-
-        for (int i = 1; i <= steps; i++) {
-            int percent = Math.min(100, i * (100 / steps));
-            String bar = "█".repeat(i) + "░".repeat(steps - i);
-            String text = "Yuklanmoqda ... " + percent + "%\n" + bar;
-
-            try {
-                EditMessageText edit = new EditMessageText();
-                edit.setChatId(progressMsg.getChatId().toString());
-                edit.setMessageId(progressMsg.getMessageId());
-                edit.setText(text);
-                bot.execute(edit);
-            } catch (Exception ignored) {}
-
-            try { Thread.sleep(delay); } catch (InterruptedException ignored) {}
-        }
-
-        try {
-            bot.execute(new DeleteMessage(progressMsg.getChatId().toString(), progressMsg.getMessageId()));
-        } catch (Exception ignored) {}
+    private void sendMsg(SlideBot bot, Long chatId, String text) {
+        try { bot.execute(new SendMessage(chatId.toString(), text)); }
+        catch (Exception e) { e.printStackTrace(); }
     }
 
-    private String getSuccessCaption(String lang, String topic, Integer balance) {
-        return switch (lang) {
-            case "RU"  -> "📕 Ваша презентация готова!\n\n📌 Tема: " + topic + "\n\nБот для подготовки презентаций и PDF-файлов: @AI_Slide_Assistant_Bot";
-            case "ENG" -> "📕 Your presentation is ready!\n\n📌 Topic: " + topic + "\n\nPresentation and PDF bot: @AI_Slide_Assistant_Bot";
-            default    -> "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + topic + "\n\nTaqdimot va pdf tayyorlovchi bot: @AI_Slide_Assistant_Bot";
-        };
-    }
-
-    private void handleCreationError(SlideBot bot, Long chatId, String lang, int cost, UserEntity user) {
-        String msg = switch (lang) {
-            case "RU"  -> "Произошла ошибка. Средства возвращены.";
-            case "ENG" -> "Error occurred. Funds returned.";
-            default    -> "Xatolik yuz berdi. Mablag' balansingizga qaytarildi.";
-        };
-        sendError(bot, chatId, msg);
-
-        try {
-            user.setBalance(user.getBalance() + cost);
-            user.setState(UserState.START);
-            userRepository.save(user);
-        } catch (Exception ignored) {}
-    }
-
-    private void sendError(SlideBot bot, Long chatId, String msg) {
-        send(bot, chatId, "❌ " + msg);
-    }
-
-    private void sendMessage(SlideBot bot, Long chatId, String text) {
-        try {
-            bot.execute(new SendMessage(chatId.toString(), text));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void send(SlideBot bot, Long chatId, String text) {
-        try {
-            bot.execute(new SendMessage(chatId.toString(), text));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private int parseIntSafe(Object val, int defaultVal) {
-        if (val == null) return defaultVal;
-        try {
-            return Integer.parseInt(String.valueOf(val));
-        } catch (Exception e) {
-            return defaultVal;
-        }
+    private int parseIntSafe(Object val, int def) {
+        if (val==null) return def;
+        try { return Integer.parseInt(String.valueOf(val)); } catch (Exception e) { return def; }
     }
 
     public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
         try {
-            AnswerCallbackQuery answer = new AnswerCallbackQuery();
-            answer.setCallbackQueryId(query.getId());
-            answer.setText("Qabul qilindi");
-            bot.execute(answer);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            AnswerCallbackQuery a = new AnswerCallbackQuery();
+            a.setCallbackQueryId(query.getId()); a.setText("Qabul qilindi");
+            bot.execute(a);
+        } catch (Exception ignored) {}
     }
 
-    public void handleMessage(UserEntity user, Message message, SlideBot bot) {
-    }
+    public void handleMessage(UserEntity user, Message message, SlideBot bot) {}
 }
