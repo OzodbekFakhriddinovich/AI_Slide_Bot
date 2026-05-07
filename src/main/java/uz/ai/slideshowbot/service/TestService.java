@@ -118,9 +118,7 @@ public class TestService {
               "inline_keyboard": [
                 [
                   {"text": "✅ 15", "callback_data": "TEST_COUNT_15"},
-                  {"text": "✅ 20", "callback_data": "TEST_COUNT_20"},
-                  {"text": "✅ 25", "callback_data": "TEST_COUNT_25"},
-                  {"text": "✅ 30", "callback_data": "TEST_COUNT_30"}
+                  {"text": "✅ 20", "callback_data": "TEST_COUNT_20"}
                 ]
               ]
             }""";
@@ -136,9 +134,7 @@ public class TestService {
         int count = switch (data) {
             case "TEST_COUNT_15" -> 15;
             case "TEST_COUNT_20" -> 20;
-            case "TEST_COUNT_25" -> 25;
-            case "TEST_COUNT_30" -> 30;
-            default -> 20; // Xavfsizlik uchun default qiymat
+            default -> 20;
         };
 
         rawSender.deleteMessageById(bot, chatId.toString(), callbackMsgId);
@@ -167,11 +163,11 @@ public class TestService {
             return;
         }
 
-        if (count < 1 || count > 30) {
+        if (count < 1 || count > 20) {
             String err = switch (lang) {
-                case "RU" -> "❌ Число должно быть от 1 до 30! Попробуйте снова.";
-                case "ENG" -> "❌ Number must be between 1 and 30! Try again.";
-                default -> "❌ Son 1 dan 30 gacha bo'lishi kerak! Qayta kiriting.";
+                case "RU" -> "❌ Число должно быть от 1 до 20! Попробуйте снова.";
+                case "ENG" -> "❌ Number must be between 1 and 20! Try again.";
+                default -> "❌ Son 1 dan 20 gacha bo'lishi kerak! Qayta kiriting.";
             };
             rawSender.sendSimpleMessage(bot, chatId.toString(), err);
             return;
@@ -312,8 +308,8 @@ public class TestService {
             String backBtn = switch (lang) {
                 case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga";
             };
-            String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"},{\"text\":\"%s\",\"callback_data\":\"TEST_MENU_BACK\"}]]}"
-                    .formatted(rawSender.esc(buyBtn), rawSender.esc(backBtn));
+            String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"}]]}"
+                    .formatted(rawSender.esc(buyBtn));
             rawSender.sendInlineMessage(bot, chatId.toString(), errText, markup);
             return;
         }
@@ -380,7 +376,7 @@ public class TestService {
             };
 
             String shareUrl = "https://t.me/share/url?url=" +
-                              java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
+                    java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
             String shareBtnText = switch (lang) {
                 case "RU"  -> "📤 Поделиться";
                 case "ENG" -> "📤 Share";
@@ -562,7 +558,7 @@ public class TestService {
             run.setColor("000000");
 
             if (line.trim().startsWith("---") &&
-                (line.contains("JAVOB") || line.contains("ANSWER") || line.contains("ОТВЕТ"))) {
+                    (line.contains("JAVOB") || line.contains("ANSWER") || line.contains("ОТВЕТ"))) {
 
                 XWPFParagraph breakPara = doc.createParagraph();
                 breakPara.createRun().addBreak(BreakType.PAGE);
@@ -618,7 +614,7 @@ public class TestService {
 
                 int percent = (i * 100) / STEPS;
                 String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                             + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+                        + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
 
                 try {
                     rawSender.editMessageText(bot, chatId.toString(), msgId,

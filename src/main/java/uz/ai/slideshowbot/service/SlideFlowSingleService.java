@@ -47,7 +47,7 @@ public class SlideFlowSingleService {
             String slideLanguage = String.valueOf(data.getOrDefault("language", "UZ"));
             int    slideCount    = parseIntSafe(data.get("slideCount"), 10);
             String templateNum   = String.valueOf(data.getOrDefault("template", "1"));
-            int    cost          = parseIntSafe(data.get("tariff"), 3000);
+            int    cost          = parseIntSafe(data.get("tariff"), 5000);
 
             if (topic.isEmpty()) {
                 sendMsg(bot, chatId, "❌ Mavzu kiritilishi shart!");

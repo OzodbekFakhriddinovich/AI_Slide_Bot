@@ -97,8 +97,7 @@ public class ReferatService {
         String markup = """
                 {"inline_keyboard":[[
                   {"text":"📄 15 sahifa","callback_data":"REF_SAHIFA_15"},
-                  {"text":"📄 20 sahifa","callback_data":"REF_SAHIFA_20"},
-                  {"text":"📄 25 sahifa","callback_data":"REF_SAHIFA_25"}
+                  {"text":"📄 20 sahifa","callback_data":"REF_SAHIFA_20"}
                 ]]}""";
         rawSender.sendInlineMessage(bot, chatId.toString(), title, markup);
     }
@@ -111,8 +110,7 @@ public class ReferatService {
 
         int sahifa = switch (data) {
             case "REF_SAHIFA_15" -> 15;
-            case "REF_SAHIFA_20" -> 20;
-            default              -> 25;
+            default              -> 20;
         };
 
         user.setReferatSahifa(sahifa);
@@ -158,8 +156,8 @@ public class ReferatService {
             String buyBtn = switch (lang) {
                 case "RU" -> "💳 Пополнить баланс"; case "ENG" -> "💳 Top up balance"; default -> "💳 Balansni to'ldirish";
             };
-            String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"},{\"text\":\"%s\",\"callback_data\":\"REFERAT_MENU_BACK\"}]]}"
-                    .formatted(rawSender.esc(buyBtn), rawSender.esc(backBtn(lang)));
+            String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"}]]}"
+                    .formatted(rawSender.esc(buyBtn));
             rawSender.sendInlineMessage(bot, chatId.toString(), err, markup);
             return;
         }
@@ -206,7 +204,7 @@ public class ReferatService {
                 default    -> "✅ <b>Referat tayyor!</b>\n\n📌 Mavzu: " + mavzu + "\n✍️ Bajardi: " + ism + "\n\nBot: @AI_Slide_Assistant_Bot";
             };
             String shareUrl = "https://t.me/share/url?url=" +
-                              java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
+                    java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
             String shareBtn = switch (lang) {
                 case "RU" -> "📤 Поделиться"; case "ENG" -> "📤 Share"; default -> "📤 Ulashish";
             };
@@ -252,7 +250,7 @@ public class ReferatService {
 
                 int pct = (i * 100) / STEPS;
                 String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                             + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+                        + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
 
                 try {
                     rawSender.editMessageText(bot, chatId.toString(), msgId,
@@ -287,9 +285,9 @@ public class ReferatService {
         user.setReferatIsm(null);
         user.setReferatSahifa(null);
         if (user.getState() == UserState.WAITING_REFERAT_TOPIC
-            || user.getState() == UserState.WAITING_REFERAT_ISM
-            || user.getState() == UserState.WAITING_REFERAT_SAHIFA
-            || user.getState() == UserState.CREATING_REFERAT) {
+                || user.getState() == UserState.WAITING_REFERAT_ISM
+                || user.getState() == UserState.WAITING_REFERAT_SAHIFA
+                || user.getState() == UserState.CREATING_REFERAT) {
             user.setState(UserState.START);
         }
         userRepository.save(user);

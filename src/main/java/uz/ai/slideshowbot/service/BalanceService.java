@@ -90,36 +90,36 @@ public class BalanceService {
         String text1 = switch (language) {
             case "RU" -> """
                     📕Презентации/Слайды цены:
-                    6-10 страниц - 3000 сум
-                    11-15 страниц - 5000 сум
-                    16-20 страниц - 7000 сум
+                    10 страниц - 5 000 сум
+                    15 страниц - 7 000 сум
                     
-                    📘Самостоятельная работа цены:
-                    до 6-10 страниц - 3000 сум
-                    до 11-15 страниц - 5000 сум
-                    до 16-20 страниц - 7000 сум
+                    📋 Тест цена:
+                    5 000 сум
+                    
+                    📝 Реферат цена:
+                    5 000 сум
                     """;
             case "ENG" -> """
                     📕Presentation/Slide prices:
-                    6-10 pages - 3000 UZS
-                    11-15 pages - 5000 UZS
-                    16-20 pages - 7000 UZS
+                    10 pages - 5,000 UZS
+                    15 pages - 7,000 UZS
                     
-                    📘Independent Work prices:
-                    up to 6-10 pages - 3000 UZS
-                    up to 6-15 pages - 5000 UZS
-                    up to 16-20 pages - 7000 UZS
+                    📋 Test price:
+                    5,000 UZS
+                    
+                    📝 Essay price:
+                    5,000 UZS
                     """;
             default -> """
                     📕Taqdimot/Slayd narxlari:
-                     6 sahifadan, 10 sahifagacha - 3000 so'm
-                    11 sahifadan, 15 sahifagacha - 5000 so'm
-                    16 sahifadan, 20 sahifagacha - 7000 so'm
+                    10 sahifa - 5 000 so'm
+                    15 sahifa - 7 000 so'm
                     
-                    📘Mustaqil ish narxlari:
-                    6-10 sahifagacha - 3000 so'm
-                    11-15 sahifagacha - 5000 so'm
-                    16-20 sahifagacha - 7000 so'm
+                    📋 Test narxi:
+                    5 000 so'm
+                    
+                    📝 Referat narxi:
+                    5 000 so'm
                     """;
         };
         sendMessage(bot, chatId, text1, null);
@@ -127,8 +127,8 @@ public class BalanceService {
         String text2 = switch (language) {
             case "RU" -> """
                     Пожалуйста, оплачивайте только следующие суммы:
-                    - 3 000 сум
                     - 5 000 сум
+                    - 7 000 сум
                     * Оплатите 10 000 сум → получите +2 000 сум бонус🎁
                     * Оплатите 20 000 сум → получите +5 000 сум бонус🎁
                     * Оплатите 50 000 сум → получите +15 000 сум бонус🎁
@@ -150,8 +150,8 @@ public class BalanceService {
                     """;
             case "ENG" -> """
                     Please pay only the following amounts:
-                    - 3,000 UZS
                     - 5,000 UZS
+                    - 7,000 UZS
                     * Pay 10,000 UZS → get +2,000 UZS bonus🎁
                     * Pay 20,000 UZS → get +5,000 UZS bonus🎁
                     * Pay 50,000 UZS → get +15,000 UZS bonus🎁
@@ -173,8 +173,8 @@ public class BalanceService {
                     """;
             default -> """
                     Iltimos faqat ushbu summalar miqdorida to'lov qiling:
-                    - 3 000 so'm
                     - 5 000 so'm
+                    - 7 000 so'm
                     * 10 000 so'm to'lov qilsangiz, +2000 so'm bonus🎁
                     * 20 000 so'm to'lov qilsangiz, +5000 so'm bonus🎁
                     * 50 000 so'm to'lov qilsangiz, +15000 so'm bonus🎁
