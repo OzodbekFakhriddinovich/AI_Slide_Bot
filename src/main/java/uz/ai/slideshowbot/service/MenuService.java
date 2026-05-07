@@ -15,51 +15,45 @@ public class MenuService {
 
         String text = switch (currentLang) {
             case "RU" -> """
-                    Привет! Добро пожаловать в AI Презентация | Слайд | PPT | PDF Бот
+                    Привет, AI Presentation | Slide | PPT | PDF Bot!
                     
-                    Я умный бот, который поможет вам подготовить презентации, визуально представить документы и управлять файлами. Я предлагаю вам следующие услуги:
+                    Я предлагаю вам следующие услуги:
                     
-                    1. Создание слайдов – подготовка профессиональных презентаций в формате PowerPoint или других форматах.
-                    2. PDF документы – легкое преобразование изображений в формат PDF.
-                    3. Идеи для презентаций – советы по эффективной и понятной организации контента.
-                    4. Дизайн презентаций – выбор подходящего дизайна для профессионального вида слайдов.
-                    5. ZIP-архивация файлов – возможность легко конвертировать файлы в формат ZIP.
-                    6. Создать тест – автоматическая генерация тестов по любой теме (5000 сум).
-                    7. Создать реферат – подготовка рефератов в формате Word (скоро).
+                    1. Создание слайдов – подготовка профессиональных презентаций в PowerPoint или других форматах.
+                    2. PDF-документы – легкое преобразование изображений в формат PDF.
+                    3. Zip-архивирование файлов – возможность легко конвертировать файлы в формат ZIP.
+                    4. Подготовка тестов – создание автоматических тестов по любой теме (5000 сумов).
+                    5. Подготовка тезисов – подготовка тезисов в формате Word (скоро будет доступно).
                     
-                    /balance — ваш баланс в кошельке бота. Если вы новый участник, у вас есть бонус 4000 сум.
-                    /buy — раздел покупок.
+                    /balance – ваш баланс в кошельке бота. Если вы новый участник, вы получаете бонус в размере 4000 сумов.
+                    /buy – раздел покупок
                     """;
 
             case "ENG" -> """
-                    Hello! Welcome to AI Presentation | Slide | PPT | PDF Bot
+                    Hello AI Presentation | Slide | PPT | PDF Bot Welcome
                     
-                    I am an intelligent bot that helps you prepare presentations, visually present documents, and manage files. I offer you the following services:
+                    I offer you the following services:
                     
-                    1. Create slides – prepare professional presentations in PowerPoint or other formats.
-                    2. PDF documents – easily convert images to PDF format.
-                    3. Presentation ideas – tips on organizing content effectively and clearly.
-                    4. Presentation design – choosing a suitable design for professional-looking slides.
-                    5. Zip files – the ability to easily convert files to ZIP format.
-                    6. Create Test – auto-generate tests on any topic (5,000 UZS).
-                    7. Create Essay – prepare essays in Word format (coming soon).
+                    1. Creating slides – preparing professional presentations in PowerPoint or other formats.
+                    2. PDF documents – easily converting images to PDF format.
+                    3. Zipping files – the ability to easily convert files to zip format.
+                    4. Preparing tests – creating automatic tests on any topic (5,000 soums).
+                    5. Preparing abstracts – preparing abstracts in Word format (coming soon).
                     
-                    /balance is your balance in the bot wallet. If you are a new member, you have a 4000 sum bonus.
-                    /buy purchase section.
+                    /balance is your balance in the bot wallet. If you are a new member, you have a bonus of 4,000 soums.
+                    /buy shopping section
                     """;
 
             default -> """
                     Salom AI Taqdimot | Slayd | PPT | PDF Bot ga xush kelibsiz
                     
-                    Men taqdimot tayyorlash, hujjatlarni vizual tarzda taqdim etish va fayllarni boshqarish bo'yicha yordam beradigan aqlli botman. Sizga quyidagi xizmatlarni taqdim etaman:
+                    Sizga quyidagi xizmatlarni taqdim etaman:
                     
                     1. Slaydlar yaratish – PowerPoint yoki boshqa formatlarda professional taqdimotlar tayyorlash.
                     2. PDF hujjatlar – Rasmlarni osongina PDF formatiga o'zgartirish.
-                    3. Taqdimot g'oyalari – Kontentni samarali va tushunarli tarzda tashkil qilish bo'yicha maslahatlar.
-                    4. Taqdimot dizayni – Professional ko'rinishga ega slaydlar uchun mos dizayn tanlash.
-                    5. Fayllarni zip qilish – Fayllarni osongina zip formatiga o'zgartirish imkoniyati.
-                    6. Test tayyorlash – Istalgan mavzuda avtomatik test yaratish (5,000 so'm).
-                    7. Referat tayyorlash – Word formatida referat tayyorlash (tez orada qo'shiladi).
+                    3. Fayllarni zip qilish – Fayllarni osongina zip formatiga o'zgartirish imkoniyati.
+                    4. Test tayyorlash – Istalgan mavzuda avtomatik test yaratish (5,000 so'm).
+                    5. Referat tayyorlash – Istalgan mavzuda avtomatik Referat yaratish (5,000 so'm).
                     
                     /balance sizning bot hamyonidagi balansingiz. Agar yangi a'zo bo'lgan bo'lsangiz sizda 4000 so'm bonus bor.
                     /buy xarid bo'limi

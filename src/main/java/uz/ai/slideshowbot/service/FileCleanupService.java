@@ -28,21 +28,16 @@ public class FileCleanupService {
         try {
             LocalDateTime now = LocalDateTime.now();
  
-            // PDF uchun yuborilgan rasmlar — 30 daqiqa
             int pdfImages = fileRepository.deleteByFileTypeAndCreatedAtBefore("PDF_IMAGE", now.minusMinutes(30));
  
-            // ZIP fayllar — 30 daqiqa
             int zipFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("ZIP", now.minusMinutes(30));
  
-            // Word→PDF yoki PDF→Word kirish/chiqish fayllar — 30 daqiqa
             int wordPdfIn  = fileRepository.deleteByFileTypeAndCreatedAtBefore("WORD_PDF_DOCX", now.minusMinutes(30));
             int wordPdfOut = fileRepository.deleteByFileTypeAndCreatedAtBefore("WORD_PDF_PDF", now.minusMinutes(30));
             int converted  = fileRepository.deleteByFileTypeAndCreatedAtBefore("WORD_PDF_RESULT", now.minusMinutes(30));
  
-            // Test word fayllar — 60 daqiqa
             int testFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("TEST", now.minusMinutes(60));
  
-            // Tolov cheklari — 24 soat
             int checkFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("CHECK", now.minusHours(24));
  
             int total = pdfImages + zipFiles + wordPdfIn + wordPdfOut + converted + testFiles + checkFiles;

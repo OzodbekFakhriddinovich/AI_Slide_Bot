@@ -40,6 +40,12 @@ public class PptxCreatorService {
     public String createPptxFromSections(String topic, String userName, String subjectName,
                                          List<GptTextGeneratorService.Section> sections,
                                          String templateStr) throws IOException {
+        return createPptxFromSections(topic, userName, subjectName, sections, templateStr, "UZ");
+    }
+
+    public String createPptxFromSections(String topic, String userName, String subjectName,
+                                         List<GptTextGeneratorService.Section> sections,
+                                         String templateStr, String language) throws IOException {
         File dir = new File("slides");
         if (!dir.exists()) dir.mkdirs();
 
@@ -48,13 +54,15 @@ public class PptxCreatorService {
         int           layout  = LAYOUT_COUNTER.getAndIncrement() % 10;
         int           pattern = (tmplNum - 1) % 6;
 
+        String lang = (language != null) ? language : "UZ";
+
         Map<Integer, byte[]> imgCache = prefetchImages(sections, topic);
 
         XMLSlideShow ppt = new XMLSlideShow();
         ppt.setPageSize(new Dimension(W, H));
 
         createTitleSlide(ppt, topic, userName, subjectName, style, pattern);
-        createRejaSlide(ppt, sections, style, pattern);
+        createRejaSlide(ppt, sections, style, pattern, lang);
 
         for (int i = 0; i < sections.size(); i++) {
             GptTextGeneratorService.Section sec = sections.get(i);
@@ -64,7 +72,7 @@ public class PptxCreatorService {
             if (slides.size() > 1)   createSC(ppt, slides.get(1), style, imgCache.get(i), layout, pattern);
             if (slides.size() > 2)   createSD(ppt, slides.get(2), style, layout, pattern);
         }
-        createThankYouSlide(ppt, userName, style, pattern);
+        createThankYouSlide(ppt, userName, style, pattern, lang);
 
         String safe     = topic.replaceAll("[^a-zA-Z0-9\\s]", "_").trim();
         String fileName = "slides/" + safe + "_" + System.currentTimeMillis() + ".pptx";
@@ -165,12 +173,18 @@ public class PptxCreatorService {
     }
 
     private void createRejaSlide(XMLSlideShow ppt, List<GptTextGeneratorService.Section> sections,
-                                 TemplateStyle style, int pattern) {
+                                 TemplateStyle style, int pattern, String lang) {
         XSLFSlide slide = ppt.createSlide();
         slide.getBackground().setFillColor(style.bgColor);
         drawPattern(slide, style, pattern);
 
-        textBox(slide, "Reja", PAD, BM + BT + 8, W - PAD*2, 80,
+        String rejaTitle = switch (lang) {
+            case "RU"  -> "План";
+            case "ENG" -> "Outline";
+            default    -> "Reja";
+        };
+
+        textBox(slide, rejaTitle, PAD, BM + BT + 8, W - PAD*2, 80,
                 FS_REJA_HEAD, true, style.titleColor,
                 org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
 
@@ -222,14 +236,14 @@ public class PptxCreatorService {
                 drawFilled(slide, ShapeType.RECT, BM+BT, innerTop, 10, innerH,
                         blend(style.titleColor, style.bgColor, 0.3f));
                 textBox(slide, title, 28, titleY, W-38, titleH, titleFs, true, style.titleColor, null);
-                if (descH > 20) fillBody(slide, bullets, 28, descY, W-38, descH, Color.BLACK); // ✅
+                if (descH > 20) fillBody(slide, bullets, 28, descY, W-38, descH, style.textColor);
             }
             case 1 -> {
                 drawFilled(slide, ShapeType.RECT, W-BM-BT-10, innerTop, 10, innerH,
                         blend(style.titleColor, style.bgColor, 0.3f));
                 textBox(slide, title, PAD, titleY, W-PAD*2-14, titleH, titleFs, true,
                         style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (descH > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-14, descH, Color.BLACK); // ✅
+                if (descH > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-14, descH, style.textColor);
             }
             case 2 -> {
                 int barH = Math.min(titleH, 72);
@@ -239,7 +253,7 @@ public class PptxCreatorService {
                         org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
                 int d2Y = innerTop + barH + 8;
                 int d2H = innerBottom - d2Y;
-                if (d2H > 20) fillBody(slide, bullets, PAD, d2Y, W-PAD*2, d2H, Color.BLACK); // ✅
+                if (d2H > 20) fillBody(slide, bullets, PAD, d2Y, W-PAD*2, d2H, style.textColor);
             }
             case 3 -> {
                 int panelW = W / 3;
@@ -249,14 +263,14 @@ public class PptxCreatorService {
                         org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
                 int dX = panelW + PAD;
                 int dW = W - panelW - PAD*2 - BM;
-                if (innerH > 20) fillBody(slide, bullets, dX, innerTop + 8, dW, innerH-16, Color.BLACK); // ✅
+                if (innerH > 20) fillBody(slide, bullets, dX, innerTop + 8, dW, innerH-16, style.textColor);
             }
             case 4 -> {
                 int barH4 = 70;
                 drawFilled(slide, ShapeType.RECT, BM, innerBottom-barH4, W-BM*2, barH4, style.titleColor);
                 textBox(slide, title, PAD, titleY, W-PAD*2, titleH, titleFs, true, style.titleColor, null);
                 int d4H = innerBottom - barH4 - titleY - titleH - gapH;
-                if (d4H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2, d4H, Color.BLACK); // ✅
+                if (d4H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2, d4H, style.textColor);
             }
             case 5 -> {
                 int panelW5 = W / 3;
@@ -264,7 +278,7 @@ public class PptxCreatorService {
                 int dW5 = W - panelW5 - PAD*2 - 10;
                 textBox(slide, title, PAD, titleY, dW5, titleH, titleFs, true, style.titleColor, null);
                 int d5H = innerBottom - descY;
-                if (d5H > 20) fillBody(slide, bullets, PAD, descY, dW5, d5H, Color.BLACK);
+                if (d5H > 20) fillBody(slide, bullets, PAD, descY, dW5, d5H, style.textColor);
             }
             case 6 -> {
                 drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, H-BM*2, style.titleColor);
@@ -280,17 +294,17 @@ public class PptxCreatorService {
                         org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
                 int d7Y = innerTop+barH7+titleH+gapH+4;
                 int d7H = innerBottom-barH7-d7Y;
-                if (d7H > 20) fillBody(slide, bullets, PAD, d7Y, W-PAD*2, d7H, Color.BLACK);
+                if (d7H > 20) fillBody(slide, bullets, PAD, d7Y, W-PAD*2, d7H, style.textColor);
             }
             case 8 -> {
                 textBox(slide, title, PAD, titleY, W-PAD*2, titleH, titleFs, true,
                         style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (descH > 20) fillBody_center(slide, bullets, PAD, descY, W-PAD*2, descH, Color.BLACK);
+                if (descH > 20) fillBody_center(slide, bullets, PAD, descY, W-PAD*2, descH, style.textColor);
             }
             default -> {
                 textBox(slide, title, PAD, titleY, W-PAD*2-60, titleH, titleFs, true, style.titleColor, null);
                 int d9H = innerBottom - descY;
-                if (d9H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-60, d9H, Color.BLACK);
+                if (d9H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-60, d9H, style.textColor);
             }
         }
 
@@ -495,26 +509,26 @@ public class PptxCreatorService {
                     card(slide, colX, colY, colW, colH, style);
                     drawFilled(slide, ShapeType.RECT, colX, colY, colW, 7, style.titleColor);
                     if (!text.isBlank())
-                        textBox(slide, text, colX+8, colY+11, colW-16, colH-14, FS_BODY, false, Color.BLACK, null);
+                        textBox(slide, text, colX+8, colY+11, colW-16, colH-14, FS_BODY, false, style.textColor, null);
                 }
                 case 1, 4, 7 -> {
                     Color cf = blend(style.bgColor, style.titleColor, 0.18f);
                     drawFilled(slide, ShapeType.RECT, colX, colY, colW, colH, cf);
                     drawFilled(slide, ShapeType.RECT, colX, colY, colW, 6, style.titleColor);
                     if (!text.isBlank())
-                        textBox(slide, text, colX+8, colY+10, colW-16, colH-14, FS_BODY, false, Color.BLACK, null);
+                        textBox(slide, text, colX+8, colY+10, colW-16, colH-14, FS_BODY, false, style.textColor, null);
                 }
                 case 2, 5, 8 -> {
                     drawFilled(slide, ShapeType.RECT, colX, colY, 4, colH, style.titleColor);
                     if (!text.isBlank())
-                        textBox(slide, text, colX+12, colY+4, colW-14, colH-8, FS_BODY, false, Color.BLACK, null);
+                        textBox(slide, text, colX+12, colY+4, colW-14, colH-8, FS_BODY, false, style.textColor, null);
                 }
                 default -> {
                     textBox(slide, String.valueOf(i+1), colX, colY, 40, 44, 28.0, true, style.titleColor, null);
                     drawFilled(slide, ShapeType.RECT, colX, colY+48, colW, 3,
                             blend(style.titleColor, style.bgColor, 0.4f));
                     if (!text.isBlank())
-                        textBox(slide, text, colX, colY+56, colW, colH-60, FS_BODY, false, Color.BLACK, null);
+                        textBox(slide, text, colX, colY+56, colW, colH-60, FS_BODY, false, style.textColor, null);
                 }
             }
         }
@@ -523,12 +537,18 @@ public class PptxCreatorService {
 
 
     private void createThankYouSlide(XMLSlideShow ppt, String userName,
-                                     TemplateStyle style, int pattern) {
+                                     TemplateStyle style, int pattern, String lang) {
         XSLFSlide slide = ppt.createSlide();
         slide.getBackground().setFillColor(style.bgColor);
         drawPattern(slide, style, pattern);
 
-        textBox(slide, "E'tiboringiz uchun rahmat!", PAD, 110, W-PAD*2, 220,
+        String thankYou = switch (lang) {
+            case "RU"  -> "Спасибо за внимание!";
+            case "ENG" -> "Thank you for your attention!";
+            default    -> "E'tiboringiz uchun rahmat!";
+        };
+
+        textBox(slide, thankYou, PAD, 110, W-PAD*2, 220,
                 46.0, true, style.titleColor,
                 org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
         textBox(slide, userName, PAD, H-110, W-PAD*2, 72,
@@ -682,16 +702,16 @@ public class PptxCreatorService {
 
     private TemplateStyle getTemplateStyle(int template) {
         return switch (template) {
-            case 1  -> new TemplateStyle(Color.WHITE,           new Color(110, 83, 49),  Color.BLACK); // ✅
-            case 2  -> new TemplateStyle(new Color(40, 40, 40), new Color(181,156,115),  Color.BLACK); // ✅
-            case 3  -> new TemplateStyle(new Color(60, 40, 20), new Color(160,120, 80),  Color.BLACK); // ✅
-            case 4  -> new TemplateStyle(Color.WHITE,           new Color( 46, 99, 58),  Color.BLACK); // ✅
-            case 5  -> new TemplateStyle(Color.WHITE,           new Color( 74, 60,117),  Color.BLACK); // ✅
-            case 6  -> new TemplateStyle(Color.WHITE,           new Color( 34, 91,145),  Color.BLACK); // ✅
-            case 7  -> new TemplateStyle(Color.WHITE,           new Color( 14, 48,102),  Color.BLACK); // ✅
-            case 8  -> new TemplateStyle(new Color(30, 30, 30), new Color(197,211,224),  Color.BLACK); // ✅
-            case 9  -> new TemplateStyle(Color.WHITE,           new Color( 28, 66, 33),  Color.BLACK); // ✅
-            case 10 -> new TemplateStyle(new Color(20, 20, 20), new Color(180,195,210),  Color.BLACK); // ✅
+            case 1  -> new TemplateStyle(Color.WHITE,           new Color(110, 83, 49),  Color.WHITE);           // malla dark → OQ matn
+            case 2  -> new TemplateStyle(new Color(40, 40, 40), new Color(181,156,115),  new Color(30,  10,  0)); // malla light → to'q jigarrang matn
+            case 3  -> new TemplateStyle(new Color(60, 40, 20), new Color(160,120, 80),  new Color(30,  10,  0)); // malla medium → to'q jigarrang matn
+            case 4  -> new TemplateStyle(Color.WHITE,           new Color( 46, 99, 58),  Color.WHITE);           // yashil → OQ
+            case 5  -> new TemplateStyle(Color.WHITE,           new Color( 74, 60,117),  Color.WHITE);           // binafsha → OQ
+            case 6  -> new TemplateStyle(Color.WHITE,           new Color( 34, 91,145),  Color.WHITE);           // ko'k → OQ
+            case 7  -> new TemplateStyle(Color.WHITE,           new Color( 14, 48,102),  Color.WHITE);           // to'q ko'k → OQ
+            case 8  -> new TemplateStyle(new Color(30, 30, 30), new Color(197,211,224),  Color.BLACK);           // och ko'k → QORA
+            case 9  -> new TemplateStyle(Color.WHITE,           new Color( 28, 66, 33),  Color.WHITE);           // to'q yashil → OQ
+            case 10 -> new TemplateStyle(new Color(20, 20, 20), new Color(180,195,210),  Color.BLACK);           // och ko'k → QORA
             default -> new TemplateStyle(Color.BLACK,           Color.WHITE,             Color.BLACK);
         };
     }

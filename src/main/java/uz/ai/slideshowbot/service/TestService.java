@@ -113,26 +113,17 @@ public class TestService {
             default -> "❓ Nechta savol kerak?";
         };
 
-        String otherText = switch (lang) {
-            case "RU" -> "✏️ Другое число (1-30)";
-            case "ENG" -> "✏️ Other number (1-30)";
-            default -> "✏️ Boshqa son (1-30)";
-        };
-
         String markup = """
-                {
-                  "inline_keyboard": [
-                    [
-                      {"text": "✅ 15", "callback_data": "TEST_COUNT_15"},
-                      {"text": "✅ 20", "callback_data": "TEST_COUNT_20"},
-                      {"text": "✅ 25", "callback_data": "TEST_COUNT_25"},
-                      {"text": "✅ 30", "callback_data": "TEST_COUNT_30"}
-                    ],
-                    [
-                      {"text": "%s", "callback_data": "TEST_COUNT_OTHER"}
-                    ]
-                  ]
-                }""".formatted(rawSender.esc(otherText));
+            {
+              "inline_keyboard": [
+                [
+                  {"text": "✅ 15", "callback_data": "TEST_COUNT_15"},
+                  {"text": "✅ 20", "callback_data": "TEST_COUNT_20"},
+                  {"text": "✅ 25", "callback_data": "TEST_COUNT_25"},
+                  {"text": "✅ 30", "callback_data": "TEST_COUNT_30"}
+                ]
+              ]
+            }""";
 
         return rawSender.sendInlineMessage(bot, chatId.toString(), title, markup);
     }
@@ -141,41 +132,23 @@ public class TestService {
         String data = query.getData();
         Long chatId = ((Message) query.getMessage()).getChatId();
         Integer callbackMsgId = query.getMessage().getMessageId();
-        String lang = lang(user);
 
-        if ("TEST_COUNT_OTHER".equals(data)) {
-            rawSender.deleteMessageById(bot, chatId.toString(), callbackMsgId);
-            user.setLastTestCountMsgId(null);
+        int count = switch (data) {
+            case "TEST_COUNT_15" -> 15;
+            case "TEST_COUNT_20" -> 20;
+            case "TEST_COUNT_25" -> 25;
+            case "TEST_COUNT_30" -> 30;
+            default -> 20; // Xavfsizlik uchun default qiymat
+        };
 
-            String prompt = switch (lang) {
-                case "RU" -> "✏️ Введите количество вопросов от 1 до 30:";
-                case "ENG" -> "✏️ Enter the number of questions (1-30):";
-                default -> "✏️ Savol sonini kiriting (1 dan 30 gacha):";
-            };
+        rawSender.deleteMessageById(bot, chatId.toString(), callbackMsgId);
+        user.setLastTestCountMsgId(null);
+        user.setTestQuestionCount(count);
+        userRepository.save(user);
 
-            Integer inputMsgId = rawSender.sendSimpleMessage(bot, chatId.toString(), prompt);
-            user.setLastTestInputMsgId(inputMsgId);
-            user.setState(UserState.WAITING_TEST_QUESTION_COUNT);
-            userRepository.save(user);
-
-        } else {
-            int count = switch (data) {
-                case "TEST_COUNT_15" -> 15;
-                case "TEST_COUNT_20" -> 20;
-                case "TEST_COUNT_25" -> 25;
-                case "TEST_COUNT_30" -> 30;
-                default -> 20;
-            };
-
-            rawSender.deleteMessageById(bot, chatId.toString(), callbackMsgId);
-            user.setLastTestCountMsgId(null);
-            user.setTestQuestionCount(count);
-            userRepository.save(user);
-
-            Integer diffMsgId = sendDifficultyInlineButtons(bot, user, chatId);
-            user.setLastTestDiffMsgId(diffMsgId);
-            userRepository.save(user);
-        }
+        Integer diffMsgId = sendDifficultyInlineButtons(bot, user, chatId);
+        user.setLastTestDiffMsgId(diffMsgId);
+        userRepository.save(user);
     }
 
     public void handleCustomCountInput(SlideBot bot, UserEntity user, Long chatId, String text) {
@@ -257,7 +230,6 @@ public class TestService {
         return rawSender.sendInlineMessage(bot, chatId.toString(), title, markup);
     }
 
-
     public void handleDifficultyCallback(SlideBot bot, UserEntity user, CallbackQuery query) {
         String data = query.getData();
         Long chatId = ((Message) query.getMessage()).getChatId();
@@ -326,12 +298,23 @@ public class TestService {
 
         int balance = (user.getBalance() != null) ? user.getBalance() : 0;
         if (balance < TEST_PRICE) {
+            // Flowni tozalaymiz
+            resetTestFlow(user);
+
             String errText = switch (lang) {
-                case "RU"  -> "❌ Недостаточно средств!\n\n💰 Ваш баланс: <b>" + balance + " сум</b>\n💳 Нужно: <b>5 000 сум</b>\n\n/buy — пополнить баланс";
-                case "ENG" -> "❌ Insufficient balance!\n\n💰 Your balance: <b>" + balance + " UZS</b>\n💳 Required: <b>5,000 UZS</b>\n\n/buy — top up balance";
-                default    -> "❌ Balansingiz yetarli emas!\n\n💰 Balansingiz: <b>" + balance + " so'm</b>\n💳 Kerak: <b>5 000 so'm</b>\n\n/buy — balansni to'ldirish";
+                case "RU"  -> "❌ Недостаточно средств!\n\n💰 Ваш баланс: <b>" + balance + " сум</b>\n💳 Нужно: <b>5 000 сум</b>";
+                case "ENG" -> "❌ Insufficient balance!\n\n💰 Your balance: <b>" + balance + " UZS</b>\n💳 Required: <b>5,000 UZS</b>";
+                default    -> "❌ Balansingiz yetarli emas!\n\n💰 Balansingiz: <b>" + balance + " so'm</b>\n💳 Kerak: <b>5 000 so'm</b>";
             };
-            rawSender.sendSimpleMessage(bot, chatId.toString(), errText);
+            String buyBtn = switch (lang) {
+                case "RU" -> "💳 Пополнить баланс"; case "ENG" -> "💳 Top up balance"; default -> "💳 Balansni to'ldirish";
+            };
+            String backBtn = switch (lang) {
+                case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga";
+            };
+            String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"},{\"text\":\"%s\",\"callback_data\":\"TEST_MENU_BACK\"}]]}"
+                    .formatted(rawSender.esc(buyBtn), rawSender.esc(backBtn));
+            rawSender.sendInlineMessage(bot, chatId.toString(), errText, markup);
             return;
         }
 
@@ -340,20 +323,27 @@ public class TestService {
         user.setState(UserState.START);
         userRepository.save(user);
 
+        // Alohida "yechildi" xabari
         String deductText = switch (lang) {
-            case "RU"  -> "💸 С вашего счёта списано <b>5 000 сум</b>.\n\nТест готовится...";
-            case "ENG" -> "💸 <b>5,000 UZS</b> has been deducted from your balance.\n\nCreating test...";
-            default    -> "💸 Hisobingizdan <b>5 000 so'm</b> yechildi.\n\nTest tayyorlanmoqda...";
+            case "RU"  -> "💸 С вашего счёта списано <b>5 000 сум</b>.";
+            case "ENG" -> "💸 <b>5,000 UZS</b> has been deducted from your balance.";
+            default    -> "💸 Hisobingizdan <b>5 000 so'm</b> yechildi.";
         };
+        rawSender.sendSimpleMessage(bot, chatId.toString(), deductText);
 
+        // Progress bar — alohida xabar
+        String progressLabel = switch (lang) {
+            case "RU"  -> "⏳ Тест готовится...";
+            case "ENG" -> "⏳ Creating test...";
+            default    -> "⏳ Test tayyorlanmoqda...";
+        };
         Integer progressMsgId = rawSender.sendSimpleMessage(bot, chatId.toString(),
-                deductText + "\n\n" + buildProgressBar(lang, 0));
+                progressLabel + "\n" + buildProgressBar(lang, 0));
 
         final Integer finalProgressMsgId = progressMsgId;
         final UserEntity finalUser = user;
         new Thread(() -> createAndSendTest(bot, finalUser, chatId, finalProgressMsgId)).start();
     }
-
 
     private void createAndSendTest(SlideBot bot, UserEntity user, Long chatId, Integer progressMsgId) {
         String lang = lang(user);
@@ -390,7 +380,7 @@ public class TestService {
             };
 
             String shareUrl = "https://t.me/share/url?url=" +
-                    java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
+                              java.net.URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8);
             String shareBtnText = switch (lang) {
                 case "RU"  -> "📤 Поделиться";
                 case "ENG" -> "📤 Share";
@@ -422,7 +412,6 @@ public class TestService {
             rawSender.sendSimpleMessage(bot, chatId.toString(), errText);
         }
     }
-
 
     private String generateTestContent(String topic, int count, String difficulty, String lang) throws Exception {
         String difficultyDesc = switch (difficulty) {
@@ -512,7 +501,6 @@ public class TestService {
         return rawText.trim();
     }
 
-
     private byte[] createWordDocument(String topic, String testContent, String lang) throws Exception {
         XWPFDocument doc = new XWPFDocument();
 
@@ -574,7 +562,7 @@ public class TestService {
             run.setColor("000000");
 
             if (line.trim().startsWith("---") &&
-                    (line.contains("JAVOB") || line.contains("ANSWER") || line.contains("ОТВЕТ"))) {
+                (line.contains("JAVOB") || line.contains("ANSWER") || line.contains("ОТВЕТ"))) {
 
                 XWPFParagraph breakPara = doc.createParagraph();
                 breakPara.createRun().addBreak(BreakType.PAGE);
@@ -630,7 +618,7 @@ public class TestService {
 
                 int percent = (i * 100) / STEPS;
                 String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                        + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+                             + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
 
                 try {
                     rawSender.editMessageText(bot, chatId.toString(), msgId,

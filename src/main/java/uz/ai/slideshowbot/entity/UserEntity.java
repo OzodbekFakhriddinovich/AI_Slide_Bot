@@ -18,11 +18,8 @@ public class UserEntity {
     private Long chatId;
 
     private UserState state;
-
     private String language;
-
     private Integer balance = 0;
-
     private String photoFileId;
 
     @Column
@@ -63,7 +60,6 @@ public class UserEntity {
     private Boolean inPdfFlow = false;
 
     private String subjectName;
-
     private Boolean referralBonusGiven = false;
 
     @Column(name = "referral_bonus_count", nullable = false)
@@ -99,57 +95,68 @@ public class UserEntity {
     @Column(name = "last_warning_time")
     private java.time.LocalDateTime lastWarningTime;
 
+    @Column(name = "in_referat_flow")
+    private Boolean inReferatFlow = false;
+
+    @Column(name = "referat_topic", length = 500)
+    private String referatTopic;
+
+    @Column(name = "referat_ism", length = 200)
+    private String referatIsm;
+
+    @Column(name = "referat_sahifa")
+    private Integer referatSahifa;
+
     public java.time.LocalDateTime getLastWarningTime() { return lastWarningTime; }
-    public void setLastWarningTime(java.time.LocalDateTime lastWarningTime)
-    { this.lastWarningTime = lastWarningTime; }
+    public void setLastWarningTime(java.time.LocalDateTime v) { this.lastWarningTime = v; }
 
     public Boolean getInWordPdfFlow() { return inWordPdfFlow; }
-    public void setInWordPdfFlow(Boolean inWordPdfFlow) { this.inWordPdfFlow = inWordPdfFlow; }
+    public void setInWordPdfFlow(Boolean v) { this.inWordPdfFlow = v; }
 
     public Long getWordPdfPendingFileId() { return wordPdfPendingFileId; }
-    public void setWordPdfPendingFileId(Long wordPdfPendingFileId) { this.wordPdfPendingFileId = wordPdfPendingFileId; }
+    public void setWordPdfPendingFileId(Long v) { this.wordPdfPendingFileId = v; }
 
     public Boolean getInTestFlow() { return inTestFlow; }
-    public void setInTestFlow(Boolean inTestFlow) { this.inTestFlow = inTestFlow; }
+    public void setInTestFlow(Boolean v) { this.inTestFlow = v; }
 
     public String getTestTopic() { return testTopic; }
-    public void setTestTopic(String testTopic) { this.testTopic = testTopic; }
+    public void setTestTopic(String v) { this.testTopic = v; }
 
     public Integer getTestQuestionCount() { return testQuestionCount; }
-    public void setTestQuestionCount(Integer testQuestionCount) { this.testQuestionCount = testQuestionCount; }
+    public void setTestQuestionCount(Integer v) { this.testQuestionCount = v; }
 
     public String getTestDifficulty() { return testDifficulty; }
-    public void setTestDifficulty(String testDifficulty) { this.testDifficulty = testDifficulty; }
+    public void setTestDifficulty(String v) { this.testDifficulty = v; }
 
     public Integer getLastTestCountMsgId() { return lastTestCountMsgId; }
-    public void setLastTestCountMsgId(Integer lastTestCountMsgId) { this.lastTestCountMsgId = lastTestCountMsgId; }
+    public void setLastTestCountMsgId(Integer v) { this.lastTestCountMsgId = v; }
 
     public Integer getLastTestInputMsgId() { return lastTestInputMsgId; }
-    public void setLastTestInputMsgId(Integer lastTestInputMsgId) { this.lastTestInputMsgId = lastTestInputMsgId; }
+    public void setLastTestInputMsgId(Integer v) { this.lastTestInputMsgId = v; }
 
     public Integer getLastTestDiffMsgId() { return lastTestDiffMsgId; }
-    public void setLastTestDiffMsgId(Integer lastTestDiffMsgId) { this.lastTestDiffMsgId = lastTestDiffMsgId; }
+    public void setLastTestDiffMsgId(Integer v) { this.lastTestDiffMsgId = v; }
 
     public Integer getReferralBonusCount() { return referralBonusCount; }
-    public void setReferralBonusCount(Integer referralBonusCount) { this.referralBonusCount = referralBonusCount; }
+    public void setReferralBonusCount(Integer v) { this.referralBonusCount = v; }
 
     public Boolean getReferralBonusGiven() { return referralBonusGiven; }
-    public void setReferralBonusGiven(Boolean referralBonusGiven) { this.referralBonusGiven = referralBonusGiven; }
+    public void setReferralBonusGiven(Boolean v) { this.referralBonusGiven = v; }
 
     public Boolean getInPdfFlow() { return inPdfFlow; }
-    public void setInPdfFlow(Boolean inPdfFlow) { this.inPdfFlow = inPdfFlow; }
+    public void setInPdfFlow(Boolean v) { this.inPdfFlow = v; }
 
     public String getReferralCode() { return referralCode; }
-    public void setReferralCode(String referralCode) { this.referralCode = referralCode; }
+    public void setReferralCode(String v) { this.referralCode = v; }
 
     public Long getReferrerId() { return referrerId; }
-    public void setReferrerId(Long referrerId) { this.referrerId = referrerId; }
+    public void setReferrerId(Long v) { this.referrerId = v; }
 
     public String getSubjectName() { return subjectName; }
-    public void setSubjectName(String subjectName) { this.subjectName = subjectName; }
+    public void setSubjectName(String v) { this.subjectName = v; }
 
     public String getTemplate() { return template; }
-    public void setTemplate(String template) { this.template = template; }
+    public void setTemplate(String v) { this.template = v; }
 
     public Integer getLastSelectedTemplateNumber() { return lastSelectedTemplateNumber; }
     public void setLastSelectedTemplateNumber(Integer n) { this.lastSelectedTemplateNumber = n; }
@@ -164,37 +171,37 @@ public class UserEntity {
     public void setLastSlideCountMessageId(Integer id) { this.lastSlideCountMessageId = id; }
 
     public String getSlideCount() { return slideCount; }
-    public void setSlideCount(String slideCount) { this.slideCount = slideCount; }
+    public void setSlideCount(String v) { this.slideCount = v; }
 
     public String getTopic() { return topic; }
-    public void setTopic(String topic) { this.topic = topic; }
+    public void setTopic(String v) { this.topic = v; }
 
     public String getUserInfo() { return userInfo; }
-    public void setUserInfo(String userInfo) { this.userInfo = userInfo; }
+    public void setUserInfo(String v) { this.userInfo = v; }
 
     public UserState getState() { return state; }
-    public void setState(UserState state) { this.state = state; }
+    public void setState(UserState v) { this.state = v; }
 
     public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public void setId(Long v) { this.id = v; }
 
     public Long getChatId() { return chatId; }
-    public void setChatId(Long chatId) { this.chatId = chatId; }
+    public void setChatId(Long v) { this.chatId = v; }
 
     public String getLanguage() { return language; }
-    public void setLanguage(String language) { this.language = language; }
+    public void setLanguage(String v) { this.language = v; }
 
     public Integer getBalance() { return balance; }
-    public void setBalance(Integer balance) { this.balance = balance; }
+    public void setBalance(Integer v) { this.balance = v; }
 
     public String getPhotoFileId() { return photoFileId; }
-    public void setPhotoFileId(String photoFileId) { this.photoFileId = photoFileId; }
+    public void setPhotoFileId(String v) { this.photoFileId = v; }
 
     public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public void setUsername(String v) { this.username = v; }
 
     public String getFirstName() { return firstName; }
-    public void setFirstName(String firstName) { this.firstName = firstName; }
+    public void setFirstName(String v) { this.firstName = v; }
 
     public Integer getLastBotMessageId() { return lastBotMessageId; }
     public void setLastBotMessageId(Integer id) { this.lastBotMessageId = id; }
@@ -203,17 +210,29 @@ public class UserEntity {
     public void setLastLanguageMessageId(Integer id) { this.lastLanguageMessageId = id; }
 
     public List<String> getFileList() { return fileList; }
-    public void setFileList(List<String> fileList) { this.fileList = fileList; }
+    public void setFileList(List<String> v) { this.fileList = v; }
 
     public Boolean getInZipFlow() { return inZipFlow; }
-    public void setInZipFlow(Boolean inZipFlow) { this.inZipFlow = inZipFlow; }
+    public void setInZipFlow(Boolean v) { this.inZipFlow = v; }
 
     public Boolean getInCheckFlow() { return inCheckFlow; }
-    public void setInCheckFlow(Boolean inCheckFlow) { this.inCheckFlow = inCheckFlow; }
+    public void setInCheckFlow(Boolean v) { this.inCheckFlow = v; }
 
     public Long getCheckFileId() { return checkFileId; }
-    public void setCheckFileId(Long checkFileId) { this.checkFileId = checkFileId; }
+    public void setCheckFileId(Long v) { this.checkFileId = v; }
 
     public Integer getLastBalanceMessageId() { return lastBalanceMessageId; }
     public void setLastBalanceMessageId(Integer id) { this.lastBalanceMessageId = id; }
+
+    public Boolean getInReferatFlow() { return inReferatFlow; }
+    public void setInReferatFlow(Boolean v) { this.inReferatFlow = v; }
+
+    public String getReferatTopic() { return referatTopic; }
+    public void setReferatTopic(String v) { this.referatTopic = v; }
+
+    public String getReferatIsm() { return referatIsm; }
+    public void setReferatIsm(String v) { this.referatIsm = v; }
+
+    public Integer getReferatSahifa() { return referatSahifa; }
+    public void setReferatSahifa(Integer v) { this.referatSahifa = v; }
 }

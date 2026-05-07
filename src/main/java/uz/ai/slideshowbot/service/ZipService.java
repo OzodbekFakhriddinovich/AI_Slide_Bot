@@ -49,55 +49,56 @@ public class ZipService {
 
         Message msg = update.getMessage();
         Long chatId = msg.getChatId();
-        String fileId;
-        String fileName;
+
+        String fileId = null;
+        String fileName = null;
+        long fileSize = 0;
 
         if (msg.hasPhoto()) {
             List<PhotoSize> photos = msg.getPhoto();
-            fileId = photos.get(photos.size() - 1).getFileId();
+            PhotoSize largest = photos.get(photos.size() - 1);
+            fileId = largest.getFileId();
+            fileSize = largest.getFileSize();
             fileName = "photo_" + System.currentTimeMillis() + ".jpg";
         } else if (msg.hasDocument()) {
             Document doc = msg.getDocument();
             fileId = doc.getFileId();
+            fileSize = doc.getFileSize();
             fileName = doc.getFileName() != null ? doc.getFileName() : "file_" + System.currentTimeMillis();
-
-            if (doc.getFileSize() > 200 * 1024 * 1024) {
-                rawSender.sendReplyWithColoredBtn(
-                        bot, chatId.toString(), msg.getMessageId(),
-                        "❌ Fayl hajmi 200 MB dan oshmasligi kerak! Maksimal 200 MB.",
-                        "◀️ Orqaga", "danger"
-                );
-                return;
-            }
         } else {
-            String backBtnText = switch (user.getLanguage()) {
-                case "RU" -> "◀️ Назад";
-                case "ENG" -> "◀️ Back";
-                default -> "◀️ Orqaga";
-            };
-            rawSender.sendReplyWithColoredBtn(
-                    bot, chatId.toString(), msg.getMessageId(),
-                    getInvalidFileText(user.getLanguage()),
-                    backBtnText, "danger"
-            );
+            rawSender.sendReplyWithColoredBtn(bot, chatId.toString(), msg.getMessageId(),
+                    getInvalidFileText(user.getLanguage()), getBackBtnText(user.getLanguage()), "danger");
             return;
         }
 
+        final long MAX_SIZE = 20L * 1024 * 1024;
+
+        if (fileSize > MAX_SIZE) {
+            String errorText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
+                case "RU" -> "❌ Размер файла превышает 20 МБ!\n Не принимается из-за ограничений Telegram.";
+                case "ENG" -> "❌ File size exceeds 20 MB!\nNot accepted due to Telegram limit.";
+                default -> "❌ Fayl hajmi 20 MB dan oshmasligi kerak!\nTelegram cheklovi tufayli qabul qilinmadi.";
+            };
+
+            rawSender.sendSimpleMessage(bot, chatId.toString(), errorText);
+            return;
+        }
+
+        final String finalFileId = fileId;
+        final String finalFileName = fileName;
+
         CompletableFuture.runAsync(() -> {
             try {
-                GetFile getFile = new GetFile(fileId);
+                GetFile getFile = new GetFile(finalFileId);
                 org.telegram.telegrambots.meta.api.objects.File tgFile = bot.execute(getFile);
                 if (tgFile == null) return;
 
                 String fileUrl = tgFile.getFileUrl(bot.getBotToken());
-                byte[] fileBytes;
-                try (InputStream in = new URL(fileUrl).openStream()) {
-                    fileBytes = in.readAllBytes();
-                }
+                byte[] fileBytes = new URL(fileUrl).openStream().readAllBytes();
 
                 FileEntity fileEntity = new FileEntity();
                 fileEntity.setChatId(chatId);
-                fileEntity.setFileName(fileName);
+                fileEntity.setFileName(finalFileName);
                 fileEntity.setFileType("ZIP");
                 fileEntity.setData(fileBytes);
                 fileRepository.save(fileEntity);
@@ -107,24 +108,14 @@ public class ZipService {
                     case "ENG" -> "📦 Create ZIP";
                     default -> "📦 ZIP yaratish";
                 };
-                rawSender.sendReplyWithColoredBtn(
-                        bot, chatId.toString(), msg.getMessageId(),
-                        getFileSavedText(user.getLanguage()),
-                        zipBtnText, "success"
-                );
+
+                rawSender.sendReplyWithColoredBtn(bot, chatId.toString(), msg.getMessageId(),
+                        getFileSavedText(user.getLanguage()), zipBtnText, "success");
 
             } catch (Exception e) {
                 e.printStackTrace();
-                String backBtnText = switch (user.getLanguage()) {
-                    case "RU" -> "◀️ Назад";
-                    case "ENG" -> "◀️ Back";
-                    default -> "◀️ Orqaga";
-                };
-                rawSender.sendReplyWithColoredBtn(
-                        bot, chatId.toString(), msg.getMessageId(),
-                        getErrorText(user.getLanguage()),
-                        backBtnText, "danger"
-                );
+                rawSender.sendReplyWithColoredBtn(bot, chatId.toString(), msg.getMessageId(),
+                        getErrorText(user.getLanguage()), getBackBtnText(user.getLanguage()), "danger");
             }
         });
     }
@@ -133,79 +124,97 @@ public class ZipService {
         Long chatId = getChatId(update);
         if (chatId == null || user == null) return;
 
-        List<FileEntity> files = fileRepository.findAllByChatId(chatId)
+        final long MAX_SIZE = 200L * 1024 * 1024;
+
+        List<FileEntity> validFiles = fileRepository.findAllByChatId(chatId)
                 .stream()
                 .filter(f -> "ZIP".equals(f.getFileType()))
+                .filter(f -> f.getData() != null && f.getData().length <= MAX_SIZE)
                 .toList();
 
-        if (files.isEmpty()) {
-            rawSender.sendWithColoredBtn(bot, chatId.toString(), getNoFilesText(user), getBackBtnText(user.getLanguage()), "danger");
+        if (validFiles.isEmpty()) {
+            rawSender.sendWithColoredBtn(bot, chatId.toString(), getNoFilesText(user),
+                    getBackBtnText(user.getLanguage()), "danger");
             return;
         }
 
-        final List<FileEntity> finalFiles = files;
-        final Long finalChatId = chatId;
-
-        new Thread(() -> {
+        CompletableFuture.runAsync(() -> {
             try {
-                SendMessage progressMsg = new SendMessage(finalChatId.toString(),
-                        getText("PLEASE_WAIT", user.getLanguage()) + "\n░░░░░░░░░░ 0%");
+                // 3 soniyalik progress
+                SendMessage progressMsg = new SendMessage(chatId.toString(),
+                        getText("PLEASE_WAIT", user.getLanguage()) + "\n⬜⬜⬜⬜");
                 Message sentProgress = bot.execute(progressMsg);
 
-                String[] bars = {
-                        "██░░░░░░░░ 20%",
-                        "████░░░░░░ 40%",
-                        "██████░░░░ 60%",
-                        "████████░░ 80%",
-                        "██████████ 100%"
-                };
-                for (String bar : bars) {
-                    Thread.sleep(800);
-                    try {
-                        EditMessageText edit = new EditMessageText();
-                        edit.setChatId(finalChatId.toString());
-                        edit.setMessageId(sentProgress.getMessageId());
-                        edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
-                        bot.execute(edit);
-                    } catch (Exception ignored) {}
+                for (int i = 1; i <= 3; i++) {
+                    String bar = "🟩".repeat(i) + "⬜".repeat(3 - i);
+                    EditMessageText edit = new EditMessageText();
+                    edit.setChatId(chatId.toString());
+                    edit.setMessageId(sentProgress.getMessageId());
+                    edit.setText(getText("PLEASE_WAIT", user.getLanguage()) + "\n" + bar);
+                    bot.execute(edit);
+                    Thread.sleep(1000);
                 }
 
-                byte[] zipBytes = createZipFromEntities(finalFiles);
+                byte[] zipBytes = createZipFromEntities(validFiles);
+                bot.execute(new DeleteMessage(chatId.toString(), sentProgress.getMessageId()));
 
-                bot.execute(new DeleteMessage(finalChatId.toString(), sentProgress.getMessageId()));
+                String zipName = "archive_" + chatId + "_" + System.currentTimeMillis() + ".zip";
+                String caption = getText("ZIP_READY", user.getLanguage());
 
                 String shareUrl = "https://t.me/share/url?url=" +
                         URLEncoder.encode("https://t.me/AI_Slide_Assistant_Bot", StandardCharsets.UTF_8);
+
                 String btnText = switch (user.getLanguage() != null ? user.getLanguage() : "UZ") {
                     case "RU" -> "📤 Поделиться";
                     case "ENG" -> "📤 Share";
                     default -> "📤 Ulashish";
                 };
-                String zipCaption = getText("ZIP_READY", user.getLanguage());
-                String zipName = "archive_" + finalChatId + ".zip";
 
-                rawSender.sendDocumentWithStyledBtn(bot, finalChatId.toString(), zipBytes, zipName,
-                        zipCaption, btnText, shareUrl, "primary");
+                rawSender.sendDocumentWithStyledBtn(bot, chatId.toString(), zipBytes, zipName,
+                        caption, btnText, shareUrl, "primary");
 
-                clearUserZipData(finalChatId);
-                menuService.sendSimpleMenu(bot, finalChatId, user.getLanguage());
+                clearUserZipData(chatId);
+                menuService.sendSimpleMenu(bot, chatId, user.getLanguage());
                 user.setInZipFlow(false);
                 userRepository.save(user);
 
             } catch (Exception e) {
                 e.printStackTrace();
-                rawSender.sendWithColoredBtn(bot, finalChatId.toString(),
-                        getErrorText(user.getLanguage()), getBackBtnText(user.getLanguage()), "danger");
+                rawSender.sendWithColoredBtn(bot, chatId.toString(), getErrorText(user.getLanguage()),
+                        getBackBtnText(user.getLanguage()), "danger");
             }
-        }).start();
+        });
     }
 
     private byte[] createZipFromEntities(List<FileEntity> files) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+
+            Map<String, Integer> nameCounter = new HashMap<>();
+
             for (FileEntity file : files) {
                 if (file.getData() == null) continue;
-                zos.putNextEntry(new ZipEntry(file.getFileName()));
+
+                String originalName = file.getFileName() != null ? file.getFileName() : "file.bin";
+                String entryName = originalName;
+
+                if (nameCounter.containsKey(originalName)) {
+                    int count = nameCounter.get(originalName) + 1;
+                    nameCounter.put(originalName, count);
+
+                    int dotIndex = originalName.lastIndexOf('.');
+                    if (dotIndex > 0) {
+                        String name = originalName.substring(0, dotIndex);
+                        String ext = originalName.substring(dotIndex);
+                        entryName = name + "_" + count + ext;
+                    } else {
+                        entryName = originalName + "_" + count;
+                    }
+                } else {
+                    nameCounter.put(originalName, 1);
+                }
+
+                zos.putNextEntry(new ZipEntry(entryName));
                 zos.write(file.getData());
                 zos.closeEntry();
             }

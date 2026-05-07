@@ -16,7 +16,7 @@ public class GptTextGeneratorService {
     private String apiKeysRaw;
 
     private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=";
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -95,32 +95,57 @@ public class GptTextGeneratorService {
         String lang = (language != null) ? language : "UZ";
 
         String yearNote = switch (tariff) {
-            case 3000 -> "Faqat 2024-yilgacha bo'lgan klassik ma'lumotlar.";
-            case 5000 -> "2025-yilgacha yangi ma'lumotlar va tadqiqotlar.";
-            case 7000 -> "2025-2026-yillardagi eng so'nggi statistikalar va yangiliklar.";
-            default   -> "Mavzuga mos umumiy ma'lumotlar.";
+            case 3000 -> "Use classic well-established information up to 2024.";
+            case 5000 -> "Include recent research and data up to 2025.";
+            case 7000 -> "Use the most current 2025-2026 statistics, breakthroughs and innovations.";
+            default   -> "Use accurate and comprehensive information relevant to the topic.";
         };
 
         String langNote = switch (lang) {
-            case "RU"  -> "Barcha matnlar RUS tilida bo'lsin.";
-            case "ENG" -> "All texts must be in ENGLISH.";
-            default    -> "Barcha matnlar O'ZBEK tilida bo'lsin.";
+            case "RU"  -> "Write ALL content in RUSSIAN language.";
+            case "ENG" -> "Write ALL content in ENGLISH language.";
+            default    -> "Write ALL content in UZBEK language (use Latin script, NOT Cyrillic).";
         };
 
         String prompt = String.format("""
-            Sen professional prezentatsiya tayyorlovchi AI assistantsan.
-            Mavzu: '%s'. %s %s
-     
-            Aynan %d ta bo'lim tayyorla. Har bir bo'lim uchun:
-            - sectionTitle: bo'lim nomi (qisqa, 3-6 so'z)
-            - slide1: oddiy matn slayd → {title, bullets: aynan 4 ta punkt (har biri 1-2 gap), imageQuery}
-            - slide2: rasm+matn slayd → {title, bullets: aynan 3 ta punkt (har biri 1-2 gap), imageQuery}
-            - slide3: 3 ustunli slayd → {title, bullets: AYNAN 3 ta punkt (har biri 2-4 gap, to'liqroq)}
-     
-            imageQuery: shu slayd mavzusiga mos YUQORI SIFATLI professional PowerPoint rasmi uchun to'liq inglizcha AI text-to-image prompt.
-     
-            FAQAT sof JSON qaytar, ``` belgisi ISHLATMA.
-            """, topic, langNote, yearNote, sectionCount);
+        You are a professional academic presentation writer creating a high-quality slide deck.
+        Topic: '%s'
+        Output language: %s
+        Content quality note: %s
+
+        Create EXACTLY %d sections. Each section MUST contain REAL, SPECIFIC and ACCURATE information:
+        - Use CONCRETE statistics with actual numbers (e.g., "GDP grew by 3.2%% in 2023", not "economy grew")
+        - Use SPECIFIC dates, years, names of scientists/countries/organizations
+        - Use REAL facts that are verifiable and academically accurate
+        - Every bullet point must be a complete, informative sentence with specific data
+        - NO generic or vague statements like "important factor" or "plays a key role"
+
+        Return ONLY a pure JSON array with EXACTLY %d objects. No markdown, no ```, no explanations.
+
+        Each object MUST follow this exact structure:
+        {
+          "sectionTitle": "Section heading",
+          "slide1": {
+            "title": "Specific slide title",
+            "bullets": [
+              "Specific fact with real data, year or statistic",
+              "Another concrete fact with name or number",
+              "Third specific fact with measurable result",
+              "Fourth fact with real-world example"
+            ],
+            "imageQuery": "specific professional photo description in english, 4k realistic"
+          },
+          "slide2": { same structure },
+          "slide3": { same structure }
+        }
+
+        CRITICAL RULES:
+        - Return ONLY the JSON array: [ {section1}, {section2}, ... ]
+        - Each section has exactly slide1, slide2, slide3
+        - Each slide has exactly 4 bullets with REAL specific facts
+        - imageQuery must be in English, detailed and descriptive
+        - NO placeholder text, NO generic phrases
+        """, topic, langNote, yearNote, sectionCount, sectionCount);
 
         try {
             String rb = callGemini(prompt);
@@ -129,9 +154,12 @@ public class GptTextGeneratorService {
             String rawText = root.path("candidates").get(0)
                     .path("content").path("parts").get(0).path("text").asText();
 
+            // Kuchli tozalash
             String clean = rawText.trim()
                     .replaceAll("(?s)```json\\s*", "")
-                    .replaceAll("```", "").trim();
+                    .replaceAll("```", "")
+                    .replaceAll("(?s)\\\\n", " ")
+                    .trim();
 
             int s = clean.indexOf('['), e = clean.lastIndexOf(']');
             if (s >= 0 && e > s) clean = clean.substring(s, e + 1);
@@ -140,17 +168,29 @@ public class GptTextGeneratorService {
             List<Section> sections = new ArrayList<>();
 
             for (JsonNode node : arr) {
-                String secTitle = node.path("sectionTitle").asText("Bo'lim");
-                List<SlideContent> contents = new ArrayList<>();
+                String secTitle = node.path("sectionTitle").asText("Bo'lim " + (sections.size() + 1));
 
+                List<SlideContent> contents = new ArrayList<>();
                 for (String key : new String[]{"slide1", "slide2", "slide3"}) {
                     JsonNode sn = node.path(key);
                     SlideContent sc = new SlideContent();
+
                     sc.title = sn.path("title").asText(secTitle);
-                    sc.imageQuery = sn.path("imageQuery").asText(topic + " professional presentation");
+
+                    // Bo'sh bo'lsa — avtomatik to'ldirish
                     sc.bullets = new ArrayList<>();
                     JsonNode bn = sn.path("bullets");
-                    if (bn.isArray()) for (JsonNode b : bn) sc.bullets.add(b.asText());
+                    if (bn.isArray() && bn.size() >= 3) {
+                        for (JsonNode b : bn) sc.bullets.add(b.asText());
+                    } else {
+                        sc.bullets.add(secTitle + " — asosiy yo'nalishlar va ta'rif");
+                        sc.bullets.add("Ilmiy tadqiqotlar va zamonaviy ma'lumotlar");
+                        sc.bullets.add("Amaliy qo'llanish sohalari va real misollar");
+                        sc.bullets.add("Natijalar, xulosalar va perspektivalar");
+                    }
+
+                    sc.imageQuery = sn.path("imageQuery").asText(topic + " professional presentation, high quality, cinematic lighting, detailed");
+
                     contents.add(sc);
                 }
                 sections.add(new Section(secTitle, contents));

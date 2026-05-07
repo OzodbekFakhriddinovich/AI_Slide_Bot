@@ -28,6 +28,7 @@ public class SlideFlowSingleService {
     @Autowired private UserRepository userRepository;
     @Autowired private GptTextGeneratorService gptService;
     @Autowired private PptxCreatorService pptxService;
+    @Autowired private TelegramRawSender rawSender;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -54,11 +55,19 @@ public class SlideFlowSingleService {
             }
 
             if (user.getBalance() == null || user.getBalance() < cost) {
-                sendMsg(bot, chatId, switch (lang) {
-                    case "RU"  -> "❌ Недостаточно средств! /buy";
-                    case "ENG" -> "❌ Insufficient balance! /buy";
-                    default    -> "❌ Balansingizda mablag' yetarli emas! /buy";
-                });
+                String err = switch (lang) {
+                    case "RU"  -> "❌ Недостаточно средств!\n\n💰 Баланс: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " сум</b>\n💳 Нужно: <b>" + cost + " сум</b>";
+                    case "ENG" -> "❌ Insufficient balance!\n\n💰 Balance: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " UZS</b>\n💳 Required: <b>" + cost + " UZS</b>";
+                    default    -> "❌ Balansingiz yetarli emas!\n\n💰 Balans: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " so'm</b>\n💳 Kerak: <b>" + cost + " so'm</b>";
+                };
+                String buyBtn = switch (lang) {
+                    case "RU"  -> "💳 Пополнить баланс";
+                    case "ENG" -> "💳 Top up balance";
+                    default    -> "💳 Balansni to'ldirish";
+                };
+                String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"}]]}"
+                        .formatted(rawSender.esc(buyBtn));
+                rawSender.sendInlineMessage(bot, chatId.toString(), err, markup);
                 return;
             }
 
@@ -120,7 +129,7 @@ public class SlideFlowSingleService {
                         List<GptTextGeneratorService.Section> sections =
                                 gptService.generateSections(topic, slideCount, slideLanguage, cost);
                         String path = pptxService.createPptxFromSections(
-                                topic, name, "", sections, templateNum);
+                                topic, name, "", sections, templateNum, slideLanguage);
                         pptxRef.set(path);
                     } catch (Exception e) {
                         errRef.set(e);
