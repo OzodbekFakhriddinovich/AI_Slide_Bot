@@ -277,7 +277,7 @@
  
     <div class="section-title">Tarifni tanlang 👇</div>
  
-    <div class="tariff-card selected" id="tariff-3000" onclick="selectTariff('3000')">
+    <div class="tariff-card selected" id="tariff-5000" onclick="selectTariff('5000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Standart</span>
@@ -285,16 +285,6 @@
         </div>
         <div class="tariff-stars">⭐</div>
         <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
-    </div>
- 
-    <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
-        <div class="tariff-row">
-            <div class="radio"><div class="radio-dot"></div></div>
-            <span class="tariff-name">Premium</span>
-            <span class="tariff-price"> </span>
-        </div>
-        <div class="tariff-stars">⭐⭐</div>
-        <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
     </div>
  
     <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
@@ -316,8 +306,6 @@
         <div class="format-text"><span>.pptx</span> — PowerPoint</div>
     </div>
  
-    
- 
     <div class="submit-wrap">
         <button class="submit-btn" id="submitBtn" onclick="submitForm()">
             ✅ Taqdimot yaratish
@@ -330,7 +318,7 @@
     tg.ready();
  
     let selectedTemplate = null;
-    let selectedTariff   = "3000";
+    let selectedTariff   = "5000";
     let selectedFormat   = "pptx";
  
     const templates = [
