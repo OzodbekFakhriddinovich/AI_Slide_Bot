@@ -228,7 +228,7 @@
     <div class="global-err" id="globalErr"></div>
  
     <div class="field-group">
-        <input type="text" id="topic" maxlength="150"
+        <input type="text" id="topic" maxlength="250"
                placeholder="Prezentatsiya qaysi mavzuda bo'lsin?"
                oninput="clearErr('topic')">
         <div class="field-hint">
@@ -250,8 +250,6 @@
             <option value="UZ">O'zbekcha</option>
             <option value="ENG">Inglizcha</option>
             <option value="RU">Ruscha</option>
-            <option value="ES">Ispan tili</option>
-            <option value="DE">Nemis tili</option>
             <option value="TOJ">Tojik tili</option>
             <option value="TUR">Turk tili</option>
         </select>
@@ -260,9 +258,8 @@
  
     <div class="field-group">
         <select class="custom-select" id="slideCount">
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
+            <option value="10 sahifalik 5000 so'm">10</option>
+            <option value="15 sahifalik 7000 so'm">15</option>
         </select>
         <div class="field-hint-gray">Taqdimotning sahifalar soni</div>
     </div>
@@ -285,27 +282,27 @@
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Standart</span>
-            <span class="tariff-price">: 3000 so'm</span>
+            <span class="tariff-price"></span>
         </div>
         <div class="tariff-stars">⭐</div>
         <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
     </div>
  
-    <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
+    <div class="tariff-card" id="tariff-5000" onclick="selectTariff()">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Premium</span>
-            <span class="tariff-price">: 5000 so'm</span>
+            <span class="tariff-price"></span>
         </div>
         <div class="tariff-stars">⭐⭐</div>
         <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
     </div>
  
-    <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
+    <div class="tariff-card" id="tariff-7000" onclick="selectTariff()">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Yuqori Sifatli Premium</span>
-            <span class="tariff-price">: 7000 so'm</span>
+            <span class="tariff-price"></span>
         </div>
         <div class="tariff-stars">⭐⭐⭐</div>
         <div class="tariff-desc">Eng kuchli model. Ilmiy manbalarga asoslangan. Tavsiya etilgan tarif.</div>
@@ -318,11 +315,6 @@
     <div class="format-card selected" id="fmt-pptx" onclick="selectFormat('pptx')">
         <div class="radio"><div class="radio-dot"></div></div>
         <div class="format-text"><span>.pptx</span> — PowerPoint</div>
-    </div>
- 
-    <div class="format-card" id="fmt-pdf" onclick="selectFormat('pdf')">
-        <div class="radio"><div class="radio-dot"></div></div>
-        <div class="format-text"><span>.pdf</span> — PDF fayl</div>
     </div>
  
     <div class="submit-wrap">
