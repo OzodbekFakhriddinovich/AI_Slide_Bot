@@ -250,14 +250,19 @@
             <option value="UZ">O'zbekcha</option>
             <option value="ENG">Inglizcha</option>
             <option value="RU">Ruscha</option>
+            <option value="ES">Ispan tili</option>
+            <option value="DE">Nemis tili</option>
+            <option value="TOJ">Tojik tili</option>
+            <option value="TUR">Turk tili</option>
         </select>
         <div class="err-msg" id="language-err">⚠️ Tilni tanlang!</div>
     </div>
  
     <div class="field-group">
         <select class="custom-select" id="slideCount">
-            <option value="10">10 sahifalik 5000 so'm</option>
-            <option value="15">15 sahifalik 7000 so'm</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
         </select>
         <div class="field-hint-gray">Taqdimotning sahifalar soni</div>
     </div>
@@ -280,6 +285,7 @@
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Standart</span>
+            <span class="tariff-price">: 3000 so'm</span>
         </div>
         <div class="tariff-stars">⭐</div>
         <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
@@ -289,6 +295,7 @@
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Premium</span>
+            <span class="tariff-price">: 5000 so'm</span>
         </div>
         <div class="tariff-stars">⭐⭐</div>
         <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
@@ -298,6 +305,7 @@
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Yuqori Sifatli Premium</span>
+            <span class="tariff-price">: 7000 so'm</span>
         </div>
         <div class="tariff-stars">⭐⭐⭐</div>
         <div class="tariff-desc">Eng kuchli model. Ilmiy manbalarga asoslangan. Tavsiya etilgan tarif.</div>
@@ -329,7 +337,7 @@
     tg.ready();
  
     let selectedTemplate = null;
-    let selectedTariff   = "5000";
+    let selectedTariff   = "3000";
     let selectedFormat   = "pptx";
  
     const templates = [
