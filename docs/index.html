@@ -238,7 +238,7 @@
     </div>
  
     <div class="field-group">
-        <input type="text" id="name" maxlength="40" placeholder="Ism Familiya">
+        <input type="text" id="name" maxlength="140" placeholder="Ism Familiya">
         <div class="field-hint-gray">
             Bo'sh qolsa Telegram ismingiz ishlatiladi.
         </div>
@@ -257,8 +257,8 @@
  
     <div class="field-group">
         <select class="custom-select" id="slideCount">
-            <option value="10 sahifalik 5000 so'm">10</option>
-            <option value="15 sahifalik 7000 so'm">15</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
         </select>
         <div class="field-hint-gray">Taqdimotning sahifalar soni</div>
     </div>
@@ -281,27 +281,27 @@
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Standart</span>
-            <span class="tariff-price"></span>
+            <span class="tariff-price"> </span>
         </div>
         <div class="tariff-stars">⭐</div>
         <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
     </div>
  
-    <div class="tariff-card" id="tariff-5000" onclick="selectTariff()">
+    <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Premium</span>
-            <span class="tariff-price"></span>
+            <span class="tariff-price"> </span>
         </div>
         <div class="tariff-stars">⭐⭐</div>
         <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
     </div>
  
-    <div class="tariff-card" id="tariff-7000" onclick="selectTariff()">
+    <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
         <div class="tariff-row">
             <div class="radio"><div class="radio-dot"></div></div>
             <span class="tariff-name">Yuqori Sifatli Premium</span>
-            <span class="tariff-price"></span>
+            <span class="tariff-price"> </span>
         </div>
         <div class="tariff-stars">⭐⭐⭐</div>
         <div class="tariff-desc">Eng kuchli model. Ilmiy manbalarga asoslangan. Tavsiya etilgan tarif.</div>
@@ -315,6 +315,8 @@
         <div class="radio"><div class="radio-dot"></div></div>
         <div class="format-text"><span>.pptx</span> — PowerPoint</div>
     </div>
+ 
+    
  
     <div class="submit-wrap">
         <button class="submit-btn" id="submitBtn" onclick="submitForm()">
