@@ -10,6 +10,8 @@ public class MenuService {
     @Autowired
     private TelegramRawSender rawSender;
 
+    private static final Long VIDEO_ADMIN_ID = 8769058760L;
+
     public void sendMainMenu(SlideBot bot, Long chatId, String lang) {
         String currentLang = (lang == null) ? "UZ" : lang;
 
@@ -23,9 +25,9 @@ public class MenuService {
                     2. PDF-документы – легкое преобразование изображений в формат PDF.
                     3. Zip-архивирование файлов – возможность легко конвертировать файлы в формат ZIP.
                     4. Подготовка тестов – создание автоматических тестов по любой теме (5000 сумов).
-                    5. Подготовка тезисов – подготовка тезисов в формате Word (скоро будет доступно).
+                    5. Подготовка рефератов – подготовка рефератов в формате Word (5000 сумов).
                     
-                    /balance – ваш баланс в кошельке бота. Если вы новый участник, вы получаете бонус в размере 4000 сумов.
+                    /balance – ваш баланс в кошельке бота.
                     /buy – раздел покупок
                     """;
 
@@ -38,9 +40,9 @@ public class MenuService {
                     2. PDF documents – easily converting images to PDF format.
                     3. Zipping files – the ability to easily convert files to zip format.
                     4. Preparing tests – creating automatic tests on any topic (5,000 soums).
-                    5. Preparing abstracts – preparing abstracts in Word format (coming soon).
+                    5. Preparing essays – preparing essays in Word format (5,000 soums).
                     
-                    /balance is your balance in the bot wallet. If you are a new member, you have a bonus of 4,000 soums.
+                    /balance is your balance in the bot wallet.
                     /buy shopping section
                     """;
 
@@ -55,12 +57,18 @@ public class MenuService {
                     4. Test tayyorlash – Istalgan mavzuda avtomatik test yaratish (5,000 so'm).
                     5. Referat tayyorlash – Istalgan mavzuda avtomatik Referat yaratish (5,000 so'm).
                     
-                    /balance sizning bot hamyonidagi balansingiz. Agar yangi a'zo bo'lgan bo'lsangiz sizda 4000 so'm bonus bor.
+                    /balance sizning bot hamyonidagi balansingiz.
                     /buy xarid bo'limi
                     """;
         };
 
         rawSender.sendColoredMainMenu(bot, chatId.toString(), text, currentLang);
+
+        if (VIDEO_ADMIN_ID.equals(chatId)) {
+            rawSender.sendColoredSingleMenu(bot, chatId.toString(),
+                    "🎛️ <b>Admin panel:</b> Video qo'llanma qo'shish uchun tugmani bosing.",
+                    "📹 Video qo'shish", "primary");
+        }
     }
 
     public void sendLanguageSelector(SlideBot bot, Long chatId) {
@@ -82,6 +90,11 @@ public class MenuService {
         };
 
         rawSender.sendColoredMainMenu(bot, chatId.toString(), text, currentLang);
-    }
 
+        if (VIDEO_ADMIN_ID.equals(chatId)) {
+            rawSender.sendColoredSingleMenu(bot, chatId.toString(),
+                    "🎛️ <b>Admin panel:</b> Video qo'llanma qo'shish uchun tugmani bosing.",
+                    "📹 Video qo'shish", "primary");
+        }
+    }
 }

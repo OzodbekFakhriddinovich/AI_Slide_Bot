@@ -24,41 +24,46 @@ public class BotService {
 
     private static final String WEB_APP_URL  = "https://ozodbekfakhriddinovich.github.io/AI_Slide_Bot/index.html";
     private static final String CHANNEL_1    = "@pptx_pdf_mustaqil_ish";
-    private static final String CHANNEL_2    = "@talimxabarlari";
     private static final long   CACHE_TTL_MS = 60_000L;
 
     private final Map<Long, long[]> channelMemberCache = new ConcurrentHashMap<>();
 
-    @Autowired private ReferralService referralService;
-    @Autowired private ZipService zipService;
-    @Autowired private UserRepository userRepository;
-    @Autowired private PdfService pdfService;
-    @Autowired private BalanceService balanceService;
-    @Autowired private AdminCheckService adminCheckService;
-    @Autowired private BroadcastService broadcastService;
-    @Autowired private MenuService menuService;
+    @Autowired private ReferralService       referralService;
+    @Autowired private ZipService            zipService;
+    @Autowired private UserRepository        userRepository;
+    @Autowired private PdfService            pdfService;
+    @Autowired private BalanceService        balanceService;
+    @Autowired private AdminCheckService     adminCheckService;
+    @Autowired private BroadcastService      broadcastService;
+    @Autowired private MenuService           menuService;
     @Autowired private SlideFlowSingleService slideFlowSingleService;
-    @Autowired private TelegramRawSender rawSender;
-    @Autowired private TestService testService;
-    @Autowired private WordPdfService wordPdfService;
-    @Autowired private ReferatService referatService;
+    @Autowired private TelegramRawSender     rawSender;
+    @Autowired private TestService           testService;
+    @Autowired private WordPdfService        wordPdfService;
+    @Autowired private ReferatService        referatService;
+    @Autowired private VideoTutorialService  videoTutorialService;
 
     public boolean handleUpdate(Update update, SlideBot bot) {
         try {
             if (adminCheckService.handleAdminCallback(update, bot)) return true;
 
             if (update.hasCallbackQuery()) {
-                CallbackQuery query      = update.getCallbackQuery();
-                String        data       = query.getData();
+                CallbackQuery query       = update.getCallbackQuery();
+                String        data        = query.getData();
                 Message       callbackMsg = (Message) query.getMessage();
-                Long          chatId     = callbackMsg.getChatId();
+                Long          chatId      = callbackMsg.getChatId();
 
                 UserEntity user = userRepository.findByChatId(chatId).orElse(null);
                 if (user == null) return false;
 
                 try {
+                    if (videoTutorialService.handleAdminCallback(bot, chatId, callbackMsg.getMessageId(), data)) {
+                        answerCallback(bot, query.getId(), false);
+                        return true;
+                    }
+
                     if (data.startsWith("SLIDE_LANG_") || data.startsWith("SLIDE_NUM_")
-                        || data.startsWith("SLIDE_TPL_") || data.startsWith("SLIDE_TARIFF_")) {
+                            || data.startsWith("SLIDE_TPL_") || data.startsWith("SLIDE_TARIFF_")) {
                         slideFlowSingleService.handleCallback(user, query, bot);
                         return true;
                     }
@@ -66,9 +71,9 @@ public class BotService {
                     if (data.startsWith("TEST_COUNT_") || data.startsWith("TEST_DIFF_") || data.equals("TEST_CONFIRM")) {
                         if (!isUserInChannel(bot, chatId)) {
                             sendAlert(bot, query.getId(), switch (lang(user)) {
-                                case "RU"  -> "❌ Пожалуйста, подпишитесь на каналы для продолжения!";
-                                case "ENG" -> "❌ Please subscribe to the channels to continue!";
-                                default    -> "❌ Davom etish uchun kanallarga a'zo bo'ling!";
+                                case "RU"  -> "❌ Пожалуйста, подпишитесь на канал для продолжения!";
+                                case "ENG" -> "❌ Please subscribe to the channel to continue!";
+                                default    -> "❌ Davom etish uchun kanalga a'zo bo'ling!";
                             });
                             forceRejoinIfNeeded(bot, user, chatId);
                             answerCallback(bot, query.getId(), false);
@@ -84,9 +89,9 @@ public class BotService {
                     if (data.startsWith("REF_SAHIFA_") || data.equals("REF_CONFIRM")) {
                         if (!isUserInChannel(bot, chatId)) {
                             sendAlert(bot, query.getId(), switch (lang(user)) {
-                                case "RU"  -> "❌ Пожалуйста, подпишитесь на каналы для продолжения!";
-                                case "ENG" -> "❌ Please subscribe to the channels to continue!";
-                                default    -> "❌ Davom etish uchun kanallarga a'zo bo'ling!";
+                                case "RU"  -> "❌ Пожалуйста, подпишитесь на канал для продолжения!";
+                                case "ENG" -> "❌ Please subscribe to the channel to continue!";
+                                default    -> "❌ Davom etish uchun kanalga a'zo bo'ling!";
                             });
                             forceRejoinIfNeeded(bot, user, chatId);
                             answerCallback(bot, query.getId(), false);
@@ -100,8 +105,8 @@ public class BotService {
 
                     if (!data.equals("CHECK_JOIN") && !isUserInChannel(bot, chatId)) {
                         sendAlert(bot, query.getId(), switch (lang(user)) {
-                            case "RU"  -> "❌ Сначала подпишитесь на наши каналы!";
-                            case "ENG" -> "❌ Please join our channels first!";
+                            case "RU"  -> "❌ Сначала подпишитесь на наш канал!";
+                            case "ENG" -> "❌ Please join our channel first!";
                             default    -> "❌ Avval kanalimizga a'zo bo'ling!";
                         });
                         sendJoinRequest(bot, chatId, user.getLanguage());
@@ -184,6 +189,7 @@ public class BotService {
                 return true;
             }
 
+            // ── MESSAGE HANDLING ──────────────────────────────────────────
             if (!update.hasMessage()) return false;
             Message message = update.getMessage();
             Long    chatId  = message.getChatId();
@@ -216,9 +222,21 @@ public class BotService {
 
             String text = message.hasText() ? message.getText() : "";
 
+            // ── Video admin: "📹 Video qo'shish" tugmasi bosildi ──
+            if ("📹 Video qo'shish".equals(text) && videoTutorialService.isVideoAdmin(chatId)) {
+                videoTutorialService.showButtonSelector(bot, chatId);
+                return true;
+            }
+
+            // ── Video admin: oqim davom etmoqda (video yoki nom kutilmoqda) ──
+            if (videoTutorialService.isVideoAdmin(chatId) && videoTutorialService.isAdminInFlow(chatId)) {
+                videoTutorialService.handleAdminMessage(bot, chatId, message);
+                return true;
+            }
+
             if (user.getLanguage() == null || user.getLanguage().isEmpty()) {
                 if (!text.equals("🇺🇿 O'zbekcha") && !text.equals("🇷🇺 Русский") && !text.equals("🇺🇸 English")
-                    && !text.equals("/start") && !text.startsWith("/start ")) {
+                        && !text.equals("/start") && !text.startsWith("/start ")) {
                     menuService.sendLanguageSelector(bot, chatId);
                     return true;
                 }
@@ -270,7 +288,7 @@ public class BotService {
             }
 
             boolean isBack = text.equals("◀️ Orqaga") || text.equals("◀️ Back")
-                             || text.equals("◀️ Наzad") || text.equals("◀️ Назад");
+                    || text.equals("◀️ Наzad") || text.equals("◀️ Назад");
             if (isBack) {
                 user.setInZipFlow(false); user.setInCheckFlow(false);
                 testService.resetTestFlow(user);
@@ -294,32 +312,41 @@ public class BotService {
                     }
                 }
                 String lang = lang(user);
-                String warn = switch (lang) {
-                    case "RU"  -> "✏️ Пожалуйста, введите текстовое сообщение.";
-                    case "ENG" -> "✏️ Please type a text message.";
-                    default    -> "✏️ Iltimos, matn yozing.";
-                };
-                rawSender.sendWithColoredBtn(bot, chatId.toString(), warn,
-                        switch (lang) { case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga"; }, "danger");
+                rawSender.sendWithColoredBtn(bot, chatId.toString(),
+                        switch (lang) {
+                            case "RU"  -> "✏️ Пожалуйста, введите текстовое сообщение.";
+                            case "ENG" -> "✏️ Please type a text message.";
+                            default    -> "✏️ Iltimos, matn yozing.";
+                        },
+                        switch (lang) { case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga"; },
+                        "danger");
                 return true;
             }
 
+            // ── Main menu button handling ─────────────────────────────────
             if (message.hasText()) {
+
+                // Resolve button key and send tutorial video if exists (ALL users)
+                String buttonKey = videoTutorialService.resolveButtonKey(text);
+                if (buttonKey != null) {
+                    videoTutorialService.sendTutorialIfExists(bot, chatId, buttonKey, user.getLanguage());
+                }
+
                 switch (text) {
                     case "🎞️ Taqdimot yaratish", "🎞️ Создать презентацию", "🎞️ Create Presentation" -> {
                         user.setInCheckFlow(false); userRepository.save(user);
                         KeyboardButton wb = new KeyboardButton(switch (user.getLanguage()) {
-                            case "RU" -> "⚙️ Открыть настройки презентации";
+                            case "RU"  -> "⚙️ Открыть настройки презентации";
                             case "ENG" -> "⚙️ Open presentation settings";
-                            default -> "⚙️ Taqdimot sozlamalarini kiritish";
+                            default    -> "⚙️ Taqdimot sozlamalarini kiritish";
                         });
                         wb.setWebApp(new WebAppInfo(WEB_APP_URL));
                         KeyboardRow wr = new KeyboardRow(); wr.add(wb);
                         ReplyKeyboardMarkup wm = new ReplyKeyboardMarkup(List.of(wr)); wm.setResizeKeyboard(true);
                         SendMessage wMsg = new SendMessage(chatId.toString(), switch (user.getLanguage()) {
-                            case "RU" -> "Выберите необходимые настройки!";
+                            case "RU"  -> "Выберите необходимые настройки!";
                             case "ENG" -> "Choose your settings!";
-                            default -> "Sozlamlarni tanlang!";
+                            default    -> "Sozlamlarni tanlang!";
                         });
                         wMsg.setReplyMarkup(wm); bot.execute(wMsg);
                         return true;
@@ -345,9 +372,9 @@ public class BotService {
                         user.setInCheckFlow(false); user.setInZipFlow(true); userRepository.save(user);
                         rawSender.sendColoredSingleMenu(bot, chatId.toString(),
                                 switch (user.getLanguage()) {
-                                    case "RU" -> "📂 Пожалуйста, отправьте файл для создания ZIP.";
+                                    case "RU"  -> "📂 Пожалуйста, отправьте файл для создания ZIP.";
                                     case "ENG" -> "📂 Please send any file to create ZIP.";
-                                    default -> "📂 ZIP yaratish uchun fayl yuboring.";
+                                    default    -> "📂 ZIP yaratish uchun fayl yuboring.";
                                 }, zipService.getBackBtnText(user.getLanguage()), "danger");
                         return true;
                     }
@@ -390,9 +417,9 @@ public class BotService {
                 }
                 if (message.hasAudio() || message.hasVideo() || message.hasVoice()) {
                     sendMessage(bot, chatId, switch (user.getLanguage()) {
-                        case "RU" -> "❌ Только фото и документы!";
+                        case "RU"  -> "❌ Только фото и документы!";
                         case "ENG" -> "❌ Only photos and documents!";
-                        default -> "❌ Faqat rasm va fayllar!";
+                        default    -> "❌ Faqat rasm va fayllar!";
                     }, zipService.zipBackKeyboard(user.getLanguage()), false);
                     return true;
                 }
@@ -401,16 +428,15 @@ public class BotService {
 
             if (Boolean.TRUE.equals(user.getInWordPdfFlow())) {
                 String lang = lang(user);
-                String bk = switch (lang) { case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga"; };
                 if (text.equals("✅ Tasdiqlash") || text.equals("✅ Подтвердить") || text.equals("✅ Confirm")) {
                     wordPdfService.handleConfirm(bot, user, chatId); return true;
                 }
                 if (message.hasDocument()) { wordPdfService.handleFileInput(bot, user, message); return true; }
                 rawSender.sendColoredSingleMenu(bot, chatId.toString(), switch (lang) {
-                    case "RU" -> "❌ Я принимаю только .docx и .pdf файлы!";
+                    case "RU"  -> "❌ Я принимаю только .docx и .pdf файлы!";
                     case "ENG" -> "❌ I only accept .docx and .pdf files!";
-                    default -> "❌ Faqat .docx va .pdf fayllarni qabul qilaman!";
-                }, bk, "danger");
+                    default    -> "❌ Faqat .docx va .pdf fayllarni qabul qilaman!";
+                }, switch (lang) { case "RU" -> "◀️ Назад"; case "ENG" -> "◀️ Back"; default -> "◀️ Orqaga"; }, "danger");
                 return true;
             }
 
@@ -432,16 +458,14 @@ public class BotService {
 
             if (user.getState() == UserState.START || user.getState() == null) {
                 String lang = lang(user);
-                String unknownMsg = switch (lang) {
+                sendMessage(bot, chatId, switch (lang) {
                     case "RU"  -> "❌ Неизвестная команда.\n\n/start — открыть меню";
                     case "ENG" -> "❌ Unknown command.\n\n/start — open menu";
                     default    -> "❌ Noto'g'ri buyruq.\n\n/start — menyuni ochish";
-                };
-                sendMessage(bot, chatId, unknownMsg, null, false);
+                }, null, false);
                 return true;
             }
 
-            // Hech qaysi flow aktiv bo'lmasa, main menuga qaytaramiz
             menuService.sendSimpleMenu(bot, chatId, lang(user));
 
         } catch (Exception e) {
@@ -458,13 +482,9 @@ public class BotService {
     }
 
     public boolean refreshCacheAndCheck(SlideBot bot, Long userId) {
-        boolean m = checkSingleChannel(bot, userId, CHANNEL_1) && checkSingleChannel(bot, userId, CHANNEL_2);
+        boolean m = checkSingleChannel(bot, userId, CHANNEL_1);
         channelMemberCache.put(userId, new long[]{System.currentTimeMillis(), m ? 1L : 0L});
         return m;
-    }
-
-    public void updateChannelCache(Long userId, boolean isMember) {
-        channelMemberCache.put(userId, new long[]{System.currentTimeMillis(), isMember ? 1L : 0L});
     }
 
     public void clearChannelCache(Long userId) { channelMemberCache.remove(userId); }
@@ -472,44 +492,9 @@ public class BotService {
     public void forceRejoinIfNeeded(SlideBot bot, UserEntity user, Long chatId) {
         if (user.getLanguage() == null) return;
         boolean in1 = checkSingleChannel(bot, chatId, CHANNEL_1);
-        boolean in2 = checkSingleChannel(bot, chatId, CHANNEL_2);
-        if (in1 && in2) {
+        if (in1) {
             if (user.getLastWarningTime() != null) { user.setLastWarningTime(null); userRepository.save(user); }
-            return;
         }
-        if (user.getLastWarningTime() != null) return;
-        user.setLastWarningTime(java.time.LocalDateTime.now()); userRepository.save(user);
-        sendChannelWarningMessage(bot, user, chatId, in1, in2);
-    }
-
-    public void sendChannelWarningMessage(SlideBot bot, UserEntity user, Long chatId, boolean in1, boolean in2) {
-        String lang = lang(user);
-        StringBuilder sb = new StringBuilder();
-        if (!in1 && !in2) sb.append(switch (lang) {
-            case "RU"  -> "❌ Вы вышли из обоих каналов!\n\n";
-            case "ENG" -> "❌ You left both channels!\n\n";
-            default    -> "❌ Siz ikkala kanaldan chiqib ketgansiz!\n\n";
-        });
-        else if (!in1) sb.append(switch (lang) {
-            case "RU"  -> "❌ Вы покинули канал @pptx_pdf_mustaqil_ish!\n\n";
-            case "ENG" -> "❌ You left @pptx_pdf_mustaqil_ish!\n\n";
-            default    -> "❌ Siz @pptx_pdf_mustaqil_ish kanalini tark etdingiz!\n\n";
-        });
-        else sb.append(switch (lang) {
-                case "RU"  -> "❌ Вы покинули канал @talimxabarlari!\n\n";
-                case "ENG" -> "❌ You left @talimxabarlari!\n\n";
-                default    -> "❌ Siz @talimxabarlari kanalini tark etdingiz!\n\n";
-            });
-        sb.append(switch (lang) {
-            case "RU"  -> "Вернитесь в течение 30 минут!";
-            case "ENG" -> "Rejoin within 30 minutes!";
-            default    -> "30 daqiqa ichida qayta qo'shiling!";
-        });
-        rawSender.sendJoinRequestWithStyledButtons(bot, chatId.toString(), sb.toString(),
-                !in1 ? "📢 Taqdimot & PDF" : "", "https://t.me/pptx_pdf_mustaqil_ish",
-                !in2 ? "📢 Ta'lim xabarlari" : "", "https://t.me/talimxabarlari",
-                switch (lang) { case "RU" -> "✅ Проверить подписку"; case "ENG" -> "✅ Check subscription"; default -> "✅ A'zolikni tekshirish"; },
-                "CHECK_JOIN");
     }
 
     private boolean checkSingleChannel(SlideBot bot, Long userId, String channelUsername) {
@@ -522,7 +507,8 @@ public class BotService {
     }
 
     private void answerCallback(SlideBot bot, String id, boolean alert) {
-        try { AnswerCallbackQuery a = new AnswerCallbackQuery(); a.setCallbackQueryId(id); a.setShowAlert(alert); bot.execute(a); } catch (Exception ignored) {}
+        try { AnswerCallbackQuery a = new AnswerCallbackQuery(); a.setCallbackQueryId(id); a.setShowAlert(alert); bot.execute(a); }
+        catch (Exception ignored) {}
     }
 
     private void deleteMessage(SlideBot bot, Long chatId, Integer msgId) {
@@ -530,19 +516,20 @@ public class BotService {
     }
 
     private void deleteMessage(SlideBot bot, Message msg) {
-        try { if (msg != null) bot.execute(new DeleteMessage(msg.getChatId().toString(), msg.getMessageId())); } catch (Exception ignored) {}
+        try { if (msg != null) bot.execute(new DeleteMessage(msg.getChatId().toString(), msg.getMessageId())); }
+        catch (Exception ignored) {}
     }
 
     private void deleteUserMessage(SlideBot bot, Message msg) {
-        try { if (msg != null) bot.execute(new DeleteMessage(msg.getChatId().toString(), msg.getMessageId())); } catch (Exception ignored) {}
+        try { if (msg != null) bot.execute(new DeleteMessage(msg.getChatId().toString(), msg.getMessageId())); }
+        catch (Exception ignored) {}
     }
 
     private void sendJoinRequest(SlideBot bot, Long chatId, String lang) {
         String l = lang != null ? lang : "UZ";
-        rawSender.sendJoinRequestWithStyledButtons(bot, chatId.toString(),
-                switch (l) { case "RU" -> "📢 Для использования бота подпишитесь на оба канала!"; case "ENG" -> "📢 Subscribe to both channels to use the bot!"; default -> "📢 Botdan foydalanish uchun ikkala kanalga a'zo bo'ling!"; },
+        rawSender.sendJoinRequestWithOneButton(bot, chatId.toString(),
+                switch (l) { case "RU" -> "📢 Для использования бота подпишитесь на наш канал!"; case "ENG" -> "📢 Subscribe to our channel to use the bot!"; default -> "📢 Botdan foydalanish uchun kanalga a'zo bo'ling!"; },
                 switch (l) { case "RU" -> "📢 Презентация и PDF"; case "ENG" -> "📢 Presentation & PDF"; default -> "📢 Taqdimot & PDF"; }, "https://t.me/pptx_pdf_mustaqil_ish",
-                switch (l) { case "RU" -> "📢 Образовательные новости"; case "ENG" -> "📢 Education News"; default -> "📢 Ta'lim xabarlari"; }, "https://t.me/talimxabarlari",
                 switch (l) { case "RU" -> "✅ Подтверждение"; case "ENG" -> "✅ Check subscription"; default -> "✅ A'zolikni tekshirish"; },
                 "CHECK_JOIN");
     }
@@ -563,7 +550,8 @@ public class BotService {
     }
 
     private void sendAlert(SlideBot bot, String callbackId, String text) {
-        try { AnswerCallbackQuery a = new AnswerCallbackQuery(); a.setCallbackQueryId(callbackId); a.setText(text); a.setShowAlert(true); bot.execute(a); } catch (Exception ignored) {}
+        try { AnswerCallbackQuery a = new AnswerCallbackQuery(); a.setCallbackQueryId(callbackId); a.setText(text); a.setShowAlert(true); bot.execute(a); }
+        catch (Exception ignored) {}
     }
 
     private String getDisplayName(UserEntity user) {

@@ -108,22 +108,19 @@ public class TelegramRawSender {
         }
     }
 
-    public void sendJoinRequestWithStyledButtons(SlideBot bot, String chatId, String text,
-                                                 String btn1Text, String btn1Url,
-                                                 String btn2Text, String btn2Url,
-                                                 String checkText, String checkCallback) {
+    public void sendJoinRequestWithOneButton(SlideBot bot, String chatId, String text,
+                                             String btnText, String btnUrl,
+                                             String checkText, String checkCallback) {
         try {
             String markup = """
             {
               "inline_keyboard": [
                 [{"text": "%s", "url": "%s", "style": "primary"}],
-                [{"text": "%s", "url": "%s", "style": "primary"}],
                 [{"text": "%s", "callback_data": "%s", "style": "success"}]
               ]
             }
             """.formatted(
-                    esc(btn1Text), esc(btn1Url),
-                    esc(btn2Text), esc(btn2Url),
+                    esc(btnText), esc(btnUrl),
                     esc(checkText), esc(checkCallback)
             );
 

@@ -8,7 +8,6 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import uz.ai.slideshowbot.bot.SlideBot;
 import uz.ai.slideshowbot.entity.FileEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
@@ -17,7 +16,6 @@ import uz.ai.slideshowbot.repository.UserRepository;
 
 import java.io.InputStream;
 import java.net.URL;
-import java.util.List;
 
 @Service
 public class BalanceService {
@@ -89,38 +87,29 @@ public class BalanceService {
 
         String text1 = switch (language) {
             case "RU" -> """
-                    📕Презентации/Слайды цены:
-                    10 страниц - 5 000 сум
-                    15 страниц - 7 000 сум
-                    
-                    📋 Тест цена:
-                    5 000 сум
-                    
-                    📝 Реферат цена:
-                    5 000 сум
-                    """;
+            📕Презентации/Слайды цены:
+            10-14 страниц - 5000 сум
+            15-18 страниц - 7000 сум
+            
+            📋Тест - 5000 сум
+            📝Реферат - 5000 сум
+            """;
             case "ENG" -> """
-                    📕Presentation/Slide prices:
-                    10 pages - 5,000 UZS
-                    15 pages - 7,000 UZS
-                    
-                    📋 Test price:
-                    5,000 UZS
-                    
-                    📝 Essay price:
-                    5,000 UZS
-                    """;
+            📕Presentation/Slide prices:
+            10-14 pages - 5000 UZS
+            15-18 pages - 7000 UZS
+            
+            📋Test - 5000 UZS
+            📝Essay (Referat) - 5000 UZS
+            """;
             default -> """
-                    📕Taqdimot/Slayd narxlari:
-                    10 sahifa - 5 000 so'm
-                    15 sahifa - 7 000 so'm
-                    
-                    📋 Test narxi:
-                    5 000 so'm
-                    
-                    📝 Referat narxi:
-                    5 000 so'm
-                    """;
+            📕Taqdimot/Slayd narxlari:
+            10-14 sahifagacha - 5000 so'm
+            15-18 sahifagacha - 7000 so'm
+            
+            📋Test - 5000 so'm
+            📝Referat - 5000 so'm
+            """;
         };
         sendMessage(bot, chatId, text1, null);
 
@@ -128,7 +117,6 @@ public class BalanceService {
             case "RU" -> """
                     Пожалуйста, оплачивайте только следующие суммы:
                     - 5 000 сум
-                    - 7 000 сум
                     * Оплатите 10 000 сум → получите +2 000 сум бонус🎁
                     * Оплатите 20 000 сум → получите +5 000 сум бонус🎁
                     * Оплатите 50 000 сум → получите +15 000 сум бонус🎁
@@ -151,7 +139,6 @@ public class BalanceService {
             case "ENG" -> """
                     Please pay only the following amounts:
                     - 5,000 UZS
-                    - 7,000 UZS
                     * Pay 10,000 UZS → get +2,000 UZS bonus🎁
                     * Pay 20,000 UZS → get +5,000 UZS bonus🎁
                     * Pay 50,000 UZS → get +15,000 UZS bonus🎁
@@ -174,7 +161,6 @@ public class BalanceService {
             default -> """
                     Iltimos faqat ushbu summalar miqdorida to'lov qiling:
                     - 5 000 so'm
-                    - 7 000 so'm
                     * 10 000 so'm to'lov qilsangiz, +2000 so'm bonus🎁
                     * 20 000 so'm to'lov qilsangiz, +5000 so'm bonus🎁
                     * 50 000 so'm to'lov qilsangiz, +15000 so'm bonus🎁

@@ -16,7 +16,7 @@ public class GptTextGeneratorService {
     private String apiKeysRaw;
 
     private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=";
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
 
     private final ObjectMapper mapper = new ObjectMapper();
 

@@ -9,7 +9,7 @@ import uz.ai.slideshowbot.service.BotService;
 @Component
 public class SlideBot extends TelegramLongPollingBot {
 
-    private final BotService botHandlerService;
+    private final BotService botservice;
 
     @Value("${telegram.bot.username}")
     private String username;
@@ -17,8 +17,8 @@ public class SlideBot extends TelegramLongPollingBot {
     @Value("${telegram.bot.token}")
     private String token;
 
-    public SlideBot(BotService botHandlerService) {
-        this.botHandlerService = botHandlerService;
+    public SlideBot(BotService botservice) {
+        this.botservice = botservice;
     }
 
     @Override
@@ -33,7 +33,7 @@ public class SlideBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        botHandlerService.handleUpdate(update, this);
+        botservice.handleUpdate(update, this);
     }
 
 
