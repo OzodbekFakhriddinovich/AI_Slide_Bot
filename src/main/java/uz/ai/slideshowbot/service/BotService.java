@@ -19,6 +19,7 @@ import uz.ai.slideshowbot.repository.UserRepository;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+
 @Service
 public class BotService {
 
@@ -189,7 +190,6 @@ public class BotService {
                 return true;
             }
 
-            // ── MESSAGE HANDLING ──────────────────────────────────────────
             if (!update.hasMessage()) return false;
             Message message = update.getMessage();
             Long    chatId  = message.getChatId();
@@ -222,13 +222,11 @@ public class BotService {
 
             String text = message.hasText() ? message.getText() : "";
 
-            // ── Video admin: "📹 Video qo'shish" tugmasi bosildi ──
             if ("📹 Video qo'shish".equals(text) && videoTutorialService.isVideoAdmin(chatId)) {
                 videoTutorialService.showButtonSelector(bot, chatId);
                 return true;
             }
 
-            // ── Video admin: oqim davom etmoqda (video yoki nom kutilmoqda) ──
             if (videoTutorialService.isVideoAdmin(chatId) && videoTutorialService.isAdminInFlow(chatId)) {
                 videoTutorialService.handleAdminMessage(bot, chatId, message);
                 return true;
@@ -323,10 +321,8 @@ public class BotService {
                 return true;
             }
 
-            // ── Main menu button handling ─────────────────────────────────
             if (message.hasText()) {
 
-                // Resolve button key and send tutorial video if exists (ALL users)
                 String buttonKey = videoTutorialService.resolveButtonKey(text);
                 if (buttonKey != null) {
                     videoTutorialService.sendTutorialIfExists(bot, chatId, buttonKey, user.getLanguage());
@@ -389,6 +385,23 @@ public class BotService {
                     case "📝 Referat tayyorlash", "📝 Создать реферат", "📝 Create Essay" -> {
                         user.setInCheckFlow(false); userRepository.save(user);
                         referatService.startFlow(bot, user, chatId); return true;
+                    }
+                    case "🖥️ Boshqa Xizmatlar", "🖥️ Другие услуги", "🖥️ Other Services" -> {
+                        user.setInCheckFlow(false); userRepository.save(user);
+                        String otherLang = lang(user);
+                        String otherText = switch (otherLang) {
+                            case "RU"  -> "🖥️ Для онлайн-компьютерных услуг перейдите к нашему партнёрскому боту:";
+                            case "ENG" -> "🖥️ For online computer services, visit our partner bot:";
+                            default    -> "🖥️ Online kompyuter xizmatlari uchun hamkor botimizga o'ting:";
+                        };
+                        String otherBtn = switch (otherLang) {
+                            case "RU"  -> "🖥️ Перейти к боту";
+                            case "ENG" -> "🖥️ Go to Bot";
+                            default    -> "🖥️ Botga o'tish";
+                        };
+                        rawSender.sendMessageWithStyledBtn(bot, chatId.toString(), otherText,
+                                otherBtn, "https://t.me/Slaydchi_Ro_bot", "success");
+                        return true;
                     }
                     case "📄 PDF yaratish", "📄 Создать PDF", "📄 Create PDF" -> {
                         user.setInCheckFlow(false); userRepository.save(user);

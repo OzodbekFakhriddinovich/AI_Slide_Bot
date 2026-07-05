@@ -161,38 +161,41 @@ public class TelegramRawSender {
     }
 
     private String buildColoredMainMenuMarkup(String lang) {
-        String pdf, zip, presentation, language, wordPdf, balance, test, referat;
+        String pdf, zip, presentation, language, wordPdf, balance, test, referat, otherServices;
 
         switch (lang != null ? lang : "UZ") {
             case "RU" -> {
-                pdf          = "📄 Создать PDF";
-                zip          = "📦 Архивировать файлы (Zip)";
-                presentation = "🎞️ Создать презентацию";
-                language     = "🌐 Язык";
-                wordPdf      = "📄 Word <--> PDF";
-                balance      = "💰 Баланс";
-                test         = "📋 Создать тест";
-                referat      = "📝 Создать реферат";
+                pdf           = "📄 Создать PDF";
+                zip           = "📦 Архивировать файлы (Zip)";
+                presentation  = "🎞️ Создать презентацию";
+                language      = "🌐 Язык";
+                wordPdf       = "📄 Word <--> PDF";
+                balance       = "💰 Баланс";
+                test          = "📋 Создать тест";
+                referat       = "📝 Создать реферат";
+                otherServices = "🖥️ Другие услуги";
             }
             case "ENG" -> {
-                pdf          = "📄 Create PDF";
-                zip          = "📦 Zip Files";
-                presentation = "🎞️ Create Presentation";
-                language     = "🌐 Language Settings";
-                wordPdf      = "📄 Word <--> PDF";
-                balance      = "💰 Balance";
-                test         = "📋 Create Test";
-                referat      = "📝 Create Essay";
+                pdf           = "📄 Create PDF";
+                zip           = "📦 Zip Files";
+                presentation  = "🎞️ Create Presentation";
+                language      = "🌐 Language Settings";
+                wordPdf       = "📄 Word <--> PDF";
+                balance       = "💰 Balance";
+                test          = "📋 Create Test";
+                referat       = "📝 Create Essay";
+                otherServices = "🖥️ Other Services";
             }
             default -> {
-                pdf          = "📄 PDF yaratish";
-                zip          = "📦 Fayllarni Zip qilish";
-                presentation = "🎞️ Taqdimot yaratish";
-                language     = "🌐 Til Sozlamalari";
-                wordPdf      = "📄 Word <--> PDF";
-                balance      = "💰 Balans";
-                test         = "📋 Test tayyorlash";
-                referat      = "📝 Referat tayyorlash";
+                pdf           = "📄 PDF yaratish";
+                zip           = "📦 Fayllarni Zip qilish";
+                presentation  = "🎞️ Taqdimot yaratish";
+                language      = "🌐 Til Sozlamalari";
+                wordPdf       = "📄 Word <--> PDF";
+                balance       = "💰 Balans";
+                test          = "📋 Test tayyorlash";
+                referat       = "📝 Referat tayyorlash";
+                otherServices = "🖥️ Boshqa Xizmatlar";
             }
         }
 
@@ -202,7 +205,8 @@ public class TelegramRawSender {
             [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "primary"}],
             [{"text": "%s", "style": "success"}, {"text": "%s", "style": "success"}],
             [{"text": "%s", "style": "danger"},  {"text": "%s", "style": "danger"}],
-            [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "primary"}]
+            [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "success"}],
+            [{"text": "%s", "style": "primary"}]
           ],
           "resize_keyboard": true,
           "one_time_keyboard": false
@@ -211,7 +215,8 @@ public class TelegramRawSender {
                 esc(pdf),  esc(zip),
                 esc(presentation), esc(language),
                 esc(wordPdf), esc(balance),
-                esc(test), esc(referat)
+                esc(test), esc(otherServices),
+                esc(referat)
         ).strip();
     }
 
