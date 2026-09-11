@@ -43,6 +43,20 @@ public class UserEntity {
     @Column(name = "last_balance_message_id")
     private Integer lastBalanceMessageId;
 
+    // === AVTO TO'LOV FIELDLARI ===
+    @Column(name = "pending_amount")
+    private Integer pendingAmount;
+
+    @Column(name = "pending_time")
+    private java.time.LocalDateTime pendingTime;
+
+    @Column(name = "pending_message_id")
+    private Integer pendingMessageId;
+
+    /** Asl tanlangan summa (6000), pendingAmount = 6010 (unique tiyinlar bilan) */
+    @Column(name = "pending_base_amount")
+    private Integer pendingBaseAmount;
+
     private String topic;
     private String userInfo;
     private String slideCount;
@@ -223,6 +237,18 @@ public class UserEntity {
 
     public Integer getLastBalanceMessageId() { return lastBalanceMessageId; }
     public void setLastBalanceMessageId(Integer id) { this.lastBalanceMessageId = id; }
+
+    public Integer getPendingAmount() { return pendingAmount; }
+    public void setPendingAmount(Integer v) { this.pendingAmount = v; }
+
+    public java.time.LocalDateTime getPendingTime() { return pendingTime; }
+    public void setPendingTime(java.time.LocalDateTime v) { this.pendingTime = v; }
+
+    public Integer getPendingMessageId() { return pendingMessageId; }
+    public void setPendingMessageId(Integer v) { this.pendingMessageId = v; }
+
+    public Integer getPendingBaseAmount() { return pendingBaseAmount; }
+    public void setPendingBaseAmount(Integer v) { this.pendingBaseAmount = v; }
 
     public Boolean getInReferatFlow() { return inReferatFlow; }
     public void setInReferatFlow(Boolean v) { this.inReferatFlow = v; }

@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: SlideBot
+
+  main:
+    web-application-type: servlet
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/Slide_Bot
+    username: slide_bot
+    password: root
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8089
+
+telegram:
+  bot:
+    token: 8122095609:AAHEZ_gh0Fh2iszNc0pwWiyqTbcVac1RmZA
+    username: AI_Slide_Assistant_Bot
+
+payment:
+  api-secret: SUPER_SECRET_HUMO_TOKEN_123
+  humo-card: "9860 3501 4654 8903"
+
+fal:
+  ai:
+    key: 0ff40924-6e44-44cb-801a-6fa87d8d93d4:9e08775202ff0ded6b2f291acf5716b2
+
+gemini:
+  api:
+    keys: "AIzaSyAI0hHWE62BGFiDTCKfwjgTXrnlMYEPM1c"
+
+logging:
+  level:
+    org.springframework: info
+    uz.ai.slideshowbot: debug

@@ -205,8 +205,8 @@ public class TelegramRawSender {
             [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "primary"}],
             [{"text": "%s", "style": "success"}, {"text": "%s", "style": "success"}],
             [{"text": "%s", "style": "danger"},  {"text": "%s", "style": "danger"}],
-            [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "success"}],
-            [{"text": "%s", "style": "primary"}]
+            [{"text": "%s", "style": "primary"}, {"text": "%s", "style": "primary"}],
+            [{"text": "%s", "style": "success"}]
           ],
           "resize_keyboard": true,
           "one_time_keyboard": false
@@ -215,8 +215,8 @@ public class TelegramRawSender {
                 esc(pdf),  esc(zip),
                 esc(presentation), esc(language),
                 esc(wordPdf), esc(balance),
-                esc(test), esc(otherServices),
-                esc(referat)
+                esc(test), esc(referat),
+                esc(otherServices)
         ).strip();
     }
 

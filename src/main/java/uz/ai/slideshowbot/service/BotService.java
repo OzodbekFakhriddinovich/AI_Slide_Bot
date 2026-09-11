@@ -164,10 +164,7 @@ public class BotService {
                             deleteMessage(bot, callbackMsg);
                             menuService.sendMainMenu(bot, chatId, user.getLanguage());
                         }
-                        case "BALANCE_PAY" -> balanceService.handleBuy(bot, user, chatId, null);
-                        case "REFERAT_MENU_BACK", "TEST_MENU_BACK" -> {
-                            menuService.sendSimpleMenu(bot, chatId, lang(user));
-                        }
+                        case "BALANCE_PAY" -> balanceService.showPaymentAmounts(bot, user, chatId, callbackMsg.getMessageId());
                         case "SEND_CHECK" -> {
                             try {
                                 org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup r =
@@ -180,7 +177,42 @@ public class BotService {
                             balanceService.handleCheckFlow(bot, user, chatId);
                             return true;
                         }
-                        default -> {}
+                        case "CHECK_AUTO_PAYMENT" -> {
+                            String chkLang = lang(user);
+                            String chkAlert = switch (chkLang) {
+                                case "RU" -> "⏳ Оплата ещё не обнаружена. Переведите точную сумму и подождите 1-2 секунды.";
+                                case "ENG" -> "⏳ Payment not detected yet. Transfer the exact amount and wait 1-2 seconds.";
+                                default -> "⏳ To'lov hali aniqlanmadi. Aynan ko'rsatilgan summani o'tkazing va 1-2 soniya kuting.";
+                            };
+                            try {
+                                org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery ans =
+                                        new org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery();
+                                ans.setCallbackQueryId(query.getId());
+                                ans.setText(chkAlert);
+                                ans.setShowAlert(true);
+                                bot.execute(ans);
+                            } catch (Exception ignored) {}
+                            return true;
+                        }
+                        case "REFERAT_MENU_BACK", "TEST_MENU_BACK" -> {
+                            menuService.sendSimpleMenu(bot, chatId, lang(user));
+                        }
+                        default -> {
+                            // PAY_AUTO_6000 yoki PAY_BANK_6000 formatidagi callbacklar
+                            if (data.startsWith("PAY_AUTO_")) {
+                                try {
+                                    int baseAmount = Integer.parseInt(data.replace("PAY_AUTO_", ""));
+                                    balanceService.handleAutoPayment(bot, user, chatId, baseAmount, callbackMsg.getMessageId());
+                                } catch (NumberFormatException ignored) {}
+                                return true;
+                            } else if (data.startsWith("PAY_BANK_")) {
+                                try {
+                                    int baseAmount = Integer.parseInt(data.replace("PAY_BANK_", ""));
+                                    balanceService.handleBankPayment(bot, user, chatId, baseAmount, callbackMsg.getMessageId());
+                                } catch (NumberFormatException ignored) {}
+                                return true;
+                            }
+                        }
                     }
                     answerCallback(bot, query.getId(), false);
                 } catch (Exception e) {
@@ -354,7 +386,7 @@ public class BotService {
                     case "/check", "/chek" -> { balanceService.handleCheckFlow(bot, user, chatId); return true; }
                     case "/buy" -> {
                         user.setInCheckFlow(false); userRepository.save(user);
-                        balanceService.handleBuy(bot, user, chatId, null); return true;
+                        balanceService.showPaymentAmounts(bot, user, chatId, null); return true;
                     }
                     case "/referal", "Referral", "Реферал" -> {
                         user.setInCheckFlow(false); userRepository.save(user);
@@ -407,6 +439,34 @@ public class BotService {
                         user.setInCheckFlow(false); userRepository.save(user);
                         try { pdfService.handlePdfFlow(update, bot, user); } catch (Exception e) { e.printStackTrace(); }
                         return true;
+                    }
+                    default -> {
+                        // Reply keyboard summa tugmalarini tekshirish: "6 000 so'm", "6 000 сум", "6 000 UZS" va h.k.
+                        Integer selectedAmount = uz.ai.slideshowbot.service.BalanceService.parseAmountFromButton(text);
+                        if (selectedAmount != null) {
+                            user.setInCheckFlow(false);
+                            userRepository.save(user);
+                            balanceService.handleAmountSelection(bot, user, chatId, selectedAmount, message.getMessageId());
+                            return true;
+                        }
+                        // Raqam yozilgan bo'lsa lekin min 6000 dan kam bo'lsa
+                        if (message.hasText()) {
+                            String trimmed = text.replaceAll("[^0-9]", "");
+                            if (!trimmed.isEmpty()) {
+                                try {
+                                    int typedAmount = Integer.parseInt(trimmed);
+                                    if (typedAmount > 0 && typedAmount < 6000) {
+                                        String minMsg = switch (lang(user)) {
+                                            case "RU" -> "❌ Минимальная сумма пополнения — 6 000 сум.\nВыберите сумму из кнопок ниже.";
+                                            case "ENG" -> "❌ Minimum top-up amount is 6,000 UZS.\nPlease select from the buttons below.";
+                                            default -> "❌ Minimal to'lov summasi — 6 000 so'm.\nQuyidagi tugmalardan summani tanlang.";
+                                        };
+                                        try { bot.execute(new SendMessage(chatId.toString(), minMsg)); } catch (Exception ignored) {}
+                                        return true;
+                                    }
+                                } catch (NumberFormatException ignored) {}
+                            }
+                        }
                     }
                 }
             }
