@@ -1,461 +1,374 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Taqdimot | Slayd | PPT</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
- 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0e1621;
-            color: #e8e8e8;
-            min-height: 100vh;
-            padding: 20px 16px 30px;
-        }
- 
-        h1 {
-            font-size: 21px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 22px;
-            line-height: 1.35;
-        }
- 
-        .field-group { margin-bottom: 18px; }
- 
-        input[type="text"] {
-            width: 100%;
-            padding: 12px 14px;
-            background: #1c2733;
-            border: 1.5px solid #2a3a4a;
-            border-radius: 10px;
-            color: #ffffff;
-            font-size: 15px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        input[type="text"]:focus { border-color: #3a7bd5; }
-        input::placeholder { color: #5a7080; }
-        input.error-field { border-color: #e06060 !important; }
- 
-        .field-hint {
-            font-size: 12px;
-            color: #4a8fd4;
-            margin-top: 6px;
-            line-height: 1.45;
-        }
- 
-        .field-hint-gray {
-            font-size: 12px;
-            color: #7a8a9a;
-            margin-top: 5px;
-        }
- 
-        .custom-select {
-            width: 100%;
-            padding: 12px 36px 12px 14px;
-            background: #1c2733;
-            border: 1.5px solid #2a3a4a;
-            border-radius: 10px;
-            color: #ffffff;
-            font-size: 15px;
-            outline: none;
-            -webkit-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237a8a9a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 14px center;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-        .custom-select option { background: #1c2733; color: #fff; }
-        .custom-select:focus { border-color: #3a7bd5; }
-        .custom-select.error-field { border-color: #e06060 !important; }
- 
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 14px;
-        }
- 
-        .template-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
- 
-        .tpl-card {
-            background: #1c2733;
-            border: 2px solid transparent;
-            border-radius: 10px;
-            overflow: hidden;
-            cursor: pointer;
-            transition: border-color 0.18s;
-        }
-        .tpl-card.selected { border-color: #3a7bd5; }
-        .tpl-card.error-tpl { border-color: #e06060; }
- 
-        .tpl-preview { width: 100%; height: 100px; overflow: hidden; }
- 
-        .tpl-1  { background: linear-gradient(145deg, #c9a882 0%, #8b6f47 40%, #5c4a30 100%); }
-        .tpl-2  { background: linear-gradient(145deg, #d4c4a8 0%, #b8a882 40%, #8b7a5a 100%); }
-        .tpl-3  { background: linear-gradient(145deg, #e8d5c0 0%, #c9a882 40%, #a07850 100%); }
-        .tpl-4  { background: linear-gradient(145deg, #2d4a2d 0%, #4a7a4a 40%, #6aaa6a 100%); }
-        .tpl-5  { background: linear-gradient(145deg, #3a2d5a 0%, #5a4a8a 40%, #7a6aaa 100%); }
-        .tpl-6  { background: linear-gradient(145deg, #1a3a5a 0%, #2a5a8a 40%, #3a7aba 100%); }
-        .tpl-7  { background: linear-gradient(145deg, #0a1a3a 0%, #1a2a6a 40%, #2a3a9a 100%); }
-        .tpl-8  { background: linear-gradient(145deg, #f0f4f8 0%, #d0dce8 40%, #b0c8dc 100%); }
-        .tpl-9  { background: linear-gradient(145deg, #1a2a1a 0%, #2a4a2a 40%, #3a6a3a 100%); }
-        .tpl-10 { background: linear-gradient(145deg, #e8eef4 0%, #c8d8e8 40%, #a8c0d4 100%); }
- 
-        .tpl-inner {
-            width: 100%; height: 100%; padding: 8px;
-            display: flex; flex-direction: column; gap: 3px;
-        }
- 
-        .tpl-label {
-            font-size: 11px; color: #8a9aaa;
-            text-align: center; padding: 6px 4px 8px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
- 
-        .tpl-note { font-size: 12px; color: #e06060; margin-bottom: 20px; }
- 
-        .err-msg {
-            font-size: 12px; color: #e06060; margin-top: 5px;
-            display: none; align-items: center; gap: 4px;
-        }
-        .err-msg.show { display: flex; }
- 
-        .section-err {
-            font-size: 12px; color: #e06060; margin-bottom: 10px;
-            display: none; align-items: center; gap: 4px;
-        }
-        .section-err.show { display: flex; }
- 
-        .tariff-card {
-            background: #1c2733;
-            border: 2px solid #2a3a4a;
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 12px;
-            cursor: pointer;
-            transition: border-color 0.18s;
-        }
-        .tariff-card.selected { border-color: #3a7bd5; }
- 
-        .tariff-row {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
-        }
- 
-        .radio {
-            width: 20px; height: 20px; border-radius: 50%;
-            border: 2px solid #4a5a6a;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; transition: border-color 0.18s, background 0.18s;
-        }
-        .tariff-card.selected .radio,
-        .format-card.selected .radio { border-color: #3a7bd5; background: #3a7bd5; }
- 
-        .radio-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: white; display: none;
-        }
-        .tariff-card.selected .radio-dot,
-        .format-card.selected .radio-dot { display: block; }
- 
-        .tariff-name { font-size: 16px; font-weight: 600; color: #fff; }
-        .tariff-price { font-size: 15px; color: #8ab4e8; margin-left: 4px; }
-        .tariff-stars { font-size: 14px; margin-bottom: 5px; }
-        .tariff-desc { font-size: 12.5px; color: #7a8a9a; line-height: 1.5; }
- 
-        .format-card {
-            background: #1c2733;
-            border: 2px solid #2a3a4a;
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: border-color 0.18s;
-            display: flex; align-items: center; gap: 12px;
-        }
-        .format-card.selected { border-color: #3a7bd5; }
-        .format-text { font-size: 15px; color: #e8e8e8; }
-        .format-text span { font-weight: 700; color: #fff; }
- 
-        .divider { height: 1px; background: #1e2d3d; margin: 20px 0; }
- 
-        .submit-wrap { margin-top: 30px; padding-bottom: 10px; }
- 
-        .submit-btn {
-            width: 100%; padding: 15px; border-radius: 12px;
-            border: none; background: #3a7bd5;
-            color: #fff; font-size: 17px; font-weight: 600;
-            cursor: pointer; transition: opacity 0.2s;
-        }
-        .submit-btn:active { opacity: 0.85; }
-        .submit-btn:disabled { background: #2a4a7a; opacity: 0.6; cursor: not-allowed; }
- 
-        .global-err {
-            background: #2a1515; border: 1px solid #e06060;
-            border-radius: 10px; padding: 12px 14px;
-            margin-bottom: 16px; font-size: 13px;
-            color: #ff8080; display: none; line-height: 1.5;
-        }
-        .global-err.show { display: block; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080f1d">
+  <meta name="description" content="Mavzuga mos dizayn, internet manbalari va haqiqiy rasmlar bilan taqdimot tayyorlang.">
+  <title>SlideBot — Taqdimot studiyasi</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { color-scheme: dark; --bg:#080f1d; --panel:#101b2c; --panel-soft:#142135; --line:#24344b; --text:#f1f6ff; --muted:#94a8c3; --cyan:#54d9ed; --red:#ff9caa; --radius:18px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:14px; line-height:1.5; padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
+    button,input,select,textarea { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:wait; opacity:.65; }
+    button,input,select,textarea { -webkit-tap-highlight-color:transparent; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible { outline:2px solid var(--cyan); outline-offset:4px; }
+    [hidden] { display:none !important; }
+    .shell { max-width:1130px; margin:auto; padding:0 24px; }
+    .topbar { height:78px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
+    .brand { display:flex; gap:10px; align-items:center; font-size:19px; font-weight:750; letter-spacing:-.6px; }
+    .brand-mark { width:32px; height:32px; display:grid; place-items:center; border-radius:9px; background:var(--cyan); color:#0b1626; }
+    .brand-mark svg { width:21px; height:21px; }
+    .top-meta { color:var(--muted); font-size:12px; }
+    .hero { padding:34px 0 28px; position:relative; overflow:hidden; }
+    .eyebrow { margin:0 0 9px; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; font-size:10px; font-weight:750; }
+    h1 { font-size:clamp(27px,4vw,38px); line-height:1.15; letter-spacing:-1.3px; margin:0 0 12px; font-weight:750; }
+    .hero p:last-child { margin:0; color:var(--muted); max-width:540px; }
+    .hero-art { position:absolute; right:10px; top:25px; width:200px; height:105px; opacity:.3; background-image:radial-gradient(circle,var(--cyan) 1px,transparent 1.6px); background-size:17px 17px; mask-image:linear-gradient(to left,#000,transparent); pointer-events:none; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1.42fr) minmax(280px,1fr); gap:24px; align-items:start; }
+    .form-stack { min-width:0; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:23px; margin:0 0 18px; }
+    .panel-head { display:flex; gap:11px; align-items:center; margin-bottom:21px; }
+    .step { display:grid; place-items:center; width:27px; height:27px; border:1px solid #34576b; border-radius:8px; color:var(--cyan); font-size:11px; font-weight:700; flex-shrink:0; }
+    h2 { margin:0; font-size:17px; font-weight:650; letter-spacing:-.35px; }
+    .field { margin-bottom:17px; }
+    .field:last-child { margin-bottom:0; }
+    label,.label { display:block; font-size:12px; font-weight:650; margin-bottom:8px; color:#d2def0; }
+    .label-row { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+    .optional,.counter { color:var(--muted); font-size:11px; font-weight:400; }
+    input[type=text],input[type=search],textarea,select { width:100%; background:#0b1524; color:var(--text); border:1px solid #2b3a52; border-radius:11px; padding:12px 13px; transition:border-color .16s; }
+    textarea { min-height:102px; resize:vertical; line-height:1.6; }
+    input::placeholder,textarea::placeholder { color:#637b98; }
+    input:focus,textarea:focus,select:focus { outline:none; border-color:var(--cyan); }
+    select { appearance:none; padding-right:35px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%2394a8c3' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; }
+    .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .field-grid>*,.workspace>*,.auto-text,.plan-text { min-width:0; }
+    input,select,textarea { min-width:0; max-width:100%; }
+    .hint { margin:6px 0 0; color:var(--muted); font-size:11px; }
+    .error { color:var(--red); font-size:12px; margin:7px 0 0; }
+    [aria-invalid=true] { border-color:var(--red) !important; }
+    .count-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; }
+    .count-button { border:1px solid #2b3a52; border-radius:9px; background:#0b1524; color:var(--muted); padding:9px 2px; font-weight:600; }
+    .count-button[aria-pressed=true] { background:#173743; color:#8de9f6; border-color:#55bbcd; }
+    .theme-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px; }
+    .theme-head .panel-head { margin:0; }
+    .badge { font-size:10px; font-weight:650; color:#a0b7d2; background:#1b2b42; border:1px solid #30445d; padding:3px 8px; border-radius:6px; white-space:nowrap; }
+    .auto-card { display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:1px solid #30516a; border-radius:12px; background:linear-gradient(115deg,#153444,#152039); padding:14px; color:var(--text); margin-bottom:16px; }
+    .auto-card[aria-pressed=true] { border-color:var(--cyan); box-shadow:inset 0 0 0 1px #54d9ed24; }
+    .auto-icon { width:35px; height:35px; display:grid; place-items:center; flex-shrink:0; color:var(--cyan); background:#54d9ed14; border-radius:10px; font-size:20px; }
+    .auto-text { flex:1; }
+    .auto-text strong { display:block; font-size:13px; }
+    .auto-text small { display:block; margin-top:2px; color:#a0b7cd; font-size:11px; }
+    .selection-mark { width:19px; height:19px; border:1px solid #476078; border-radius:50%; display:grid; place-items:center; flex-shrink:0; font-size:11px; color:transparent; }
+    [aria-pressed=true]>.selection-mark { background:var(--cyan); color:#082332; border-color:var(--cyan); }
+    .theme-search { padding:10px 12px !important; font-size:12px; margin-bottom:12px; }
+    .filters { display:flex; gap:7px; overflow-x:auto; padding:1px 2px 10px; margin-bottom:5px; scrollbar-width:thin; }
+    .filter { white-space:nowrap; color:var(--muted); border:1px solid transparent; background:transparent; padding:5px 10px; border-radius:7px; font-size:11px; }
+    .filter[aria-pressed=true] { color:#d4edf3; background:#22394b; border-color:#345268; }
+    .theme-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; }
+    .theme-card { padding:0; text-align:left; border:1px solid #2b3c54; border-radius:10px; background:#0c1727; color:#bdcce0; overflow:hidden; position:relative; transition:border-color .16s,transform .16s; }
+    .theme-card:hover { border-color:#648298; transform:translateY(-1px); }
+    .theme-card[aria-pressed=true] { border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan); }
+    .theme-card .selection-mark { position:absolute; right:7px; top:7px; width:15px; height:15px; font-size:9px; background:#091728a6; }
+    .theme-card[aria-pressed=true] .selection-mark { background:var(--cyan); border-color:var(--cyan); color:#082332; }
+    .mini-slide { display:block; aspect-ratio:16/9; position:relative; overflow:hidden; padding:14px 11px 9px; background:var(--theme-bg); color:var(--theme-fg); }
+    .mini-kicker { display:block; width:36%; height:2px; margin:0 0 9px; background:var(--theme-accent); opacity:.9; }
+    .mini-title { display:block; width:65%; height:4px; margin-bottom:5px; border-radius:1px; background:currentColor; opacity:.85; }
+    .mini-title.short { width:46%; }
+    .mini-line { display:block; width:50%; height:2px; background:currentColor; opacity:.3; margin-top:6px; }
+    .mini-orbit { position:absolute; border:1px solid var(--theme-accent); border-radius:50%; width:65px; height:65px; right:-23px; bottom:-19px; opacity:.6; }
+    .mini-orbit:before { content:""; position:absolute; inset:9px; border:1px solid var(--theme-accent); border-radius:50%; }
+    .theme-caption { display:flex; gap:4px; align-items:center; justify-content:space-between; padding:8px; font-size:10px; font-weight:600; }
+    .theme-index { color:#6c829e; font-size:9px; }
+    .empty { margin:12px 0; color:var(--muted); font-size:12px; }
+    .preview-note { font-size:10px; color:#7e96b4; margin:13px 0 0; }
+    .format-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .format-button { border:1px solid #2b3c54; background:#0c1727; color:var(--muted); border-radius:11px; display:flex; gap:10px; align-items:center; text-align:left; padding:13px; }
+    .format-button[aria-pressed=true] { background:#15313c; color:var(--text); border-color:#52b9cb; }
+    .format-symbol { width:31px; height:36px; display:grid; place-items:center; border:1px solid currentColor; border-radius:5px; color:#7ddfe9; font-size:9px; font-weight:700; }
+    .format-button strong,.format-button small { display:block; }
+    .format-button strong { font-size:12px; }
+    .format-button small { font-size:10px; font-weight:400; margin-top:2px; color:var(--muted); }
+    .plan-options { display:grid; gap:9px; }
+    .plan-button { display:flex; align-items:center; gap:11px; width:100%; border:1px solid #2b3c54; border-radius:11px; background:#0c1727; color:var(--text); padding:13px; text-align:left; }
+    .plan-button[aria-pressed=true] { border-color:#52b9cb; background:#15313c; }
+    .plan-text { flex:1; }
+    .plan-text strong { display:block; font-size:12px; }
+    .plan-text small { display:block; margin-top:3px; color:var(--muted); font-size:10px; }
+    .plan-price { color:#bee8ed; font-size:12px; white-space:nowrap; }
+    .preview-column { position:sticky; top:22px; }
+    .preview-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+    .live-dot { width:5px; height:5px; background:var(--cyan); border-radius:50%; display:inline-block; margin-right:5px; }
+    .deck-preview { aspect-ratio:16/10; background:var(--theme-bg); color:var(--theme-fg); border:1px solid #3a5068; border-radius:13px; padding:25px; position:relative; overflow:hidden; box-shadow:0 18px 50px #0004; transition:background .2s,color .2s; }
+    .deck-preview:before { content:""; position:absolute; width:180px; height:180px; border:1px solid var(--theme-accent); border-radius:50%; right:-90px; top:10px; opacity:.5; box-shadow:0 0 0 24px var(--theme-bg),0 0 0 25px var(--theme-accent); }
+    .deck-preview:after { content:""; position:absolute; right:24px; bottom:20px; width:76px; height:47px; background-image:radial-gradient(circle,var(--theme-accent) 1px,transparent 1.5px); background-size:9px 9px; opacity:.5; }
+    .deck-kicker { display:block; font-size:7px; font-weight:700; text-transform:uppercase; color:var(--theme-accent); letter-spacing:1.6px; margin-bottom:17px; position:relative; }
+    .deck-topic { font-size:clamp(18px,2.2vw,24px); line-height:1.25; max-width:85%; letter-spacing:-.7px; margin:0; position:relative; overflow-wrap:anywhere; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; }
+    .deck-rule { display:block; width:32px; height:3px; background:var(--theme-accent); margin-top:17px; }
+    .deck-author { display:block; font-size:8px; margin-top:12px; opacity:.7; max-width:75%; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; position:relative; }
+    .preview-theme-name { margin:12px 0 3px; font-size:12px; font-weight:600; }
+    .preview-disclaimer { margin:0 0 22px; font-size:10px; color:var(--muted); }
+    .order-box { padding:20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); }
+    .order-title { font-size:13px; font-weight:600; margin:0 0 15px; }
+    .summary-line { display:flex; justify-content:space-between; gap:15px; margin:9px 0; color:var(--muted); font-size:11px; }
+    .summary-line span:last-child { color:#d2def0; text-align:right; }
+    .features { list-style:none; padding:14px 0; margin:14px 0 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:#a3b6ce; font-size:11px; }
+    .features li { margin:5px 0; display:flex; gap:8px; }
+    .features li:before { content:"✓"; color:var(--cyan); }
+    .total { display:flex; justify-content:space-between; align-items:center; margin:18px 0; }
+    .total span { font-size:12px; color:var(--muted); }
+    .total strong { font-size:22px; letter-spacing:-.7px; }
+    .total small { font-size:11px; font-weight:400; color:#b2c4da; }
+    .submit { width:100%; border:0; border-radius:11px; padding:14px 12px; background:var(--cyan); color:#09232e; font-size:13px; font-weight:750; display:flex; justify-content:center; align-items:center; gap:10px; }
+    .submit svg { width:16px; height:16px; }
+    .delivery-note { text-align:center; margin:10px 0 0; color:var(--muted); font-size:10px; }
+    .notice { padding:12px 14px; border:1px solid #375168; border-radius:11px; background:#142638; color:#bdd7e7; font-size:12px; margin:0 0 17px; }
+    .notice.error-notice { border-color:#743f53; background:#2c1b2b; color:#ffc0ca; }
+    .notice.success { border-color:#2e766d; background:#11352f; color:#abedda; }
+    .footer { margin:21px 0 0; text-align:center; color:#6f85a0; font-size:10px; }
+    @media(max-width:760px) { .shell { padding:0 16px; max-width:620px; } .topbar { height:64px; } .hero { padding:26px 0 23px; } .hero-art { right:-45px; opacity:.17; } .hero p:last-child { max-width:360px; font-size:12px; } .workspace { grid-template-columns:minmax(0,1fr); gap:0; } .preview-column { position:static; } .preview-visual { display:none; } .panel { padding:19px; margin-bottom:14px; } .theme-grid { gap:10px; } .order-box { margin-top:0; } .top-meta { font-size:10px; } }
+    @media(max-width:380px) { .shell { padding:0 12px; } .panel { padding:16px; } .theme-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .field-grid { gap:10px; } .format-button { padding:10px; gap:7px; } .count-options { gap:5px; } }
+    @media(prefers-reduced-motion:reduce) { *,*:before,*:after { transition:none !important; scroll-behavior:auto !important; } }
+  </style>
 </head>
 <body>
- 
-    <h1>AI orqali prezentatsiya tayyorlash.</h1>
- 
-    <div class="global-err" id="globalErr"></div>
- 
-    <div class="field-group">
-        <input type="text" id="topic" maxlength="150"
-               placeholder="Prezentatsiya qaysi mavzuda bo'lsin?"
-               oninput="clearErr('topic')">
-        <div class="field-hint">
-            Mavzuni to'liq va tushunarli kiriting. Fan nomini ham qo'shsangiz taqdimot aniqroq bo'ladi.
-        </div>
-        <div class="err-msg" id="topic-err">⚠️ Mavzu kiritilishi shart!</div>
-    </div>
- 
-    <div class="field-group">
-        <input type="text" id="name" maxlength="40" placeholder="Ism Familiya">
-        <div class="field-hint-gray">
-            Bo'sh qolsa Telegram ismingiz ishlatiladi.
-        </div>
-    </div>
- 
-    <div class="field-group">
-        <select class="custom-select" id="language" onchange="clearErr('language')">
-            <option value="" disabled selected>Tilni tanlang...</option>
-            <option value="UZ">O'zbekcha</option>
-            <option value="ENG">Inglizcha</option>
-            <option value="RU">Ruscha</option>
-            <option value="ES">Ispan tili</option>
-            <option value="DE">Nemis tili</option>
-            <option value="TOJ">Tojik tili</option>
-            <option value="TUR">Turk tili</option>
-        </select>
-        <div class="err-msg" id="language-err">⚠️ Tilni tanlang!</div>
-    </div>
- 
-    <div class="field-group">
-        <select class="custom-select" id="slideCount">
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
-        </select>
-        <div class="field-hint-gray">Taqdimotning sahifalar soni</div>
-    </div>
- 
-    <div class="divider"></div>
- 
-    <div class="section-title">Prezentatsiya dizaynini tanlang</div>
-    <div class="section-err" id="template-err">⚠️ Shablon tanlanmadi — bitta tanlang!</div>
-    <div class="template-grid" id="templateGrid"></div>
-    <div class="tpl-note">❗ 4–5-sahifalardan boshlab rasmlar ham mavjud.</div>
- 
-    <div class="divider"></div>
- 
-    <div class="section-title">Tarifni tanlang 👇</div>
- 
-    <div class="tariff-card selected" id="tariff-3000" onclick="selectTariff('3000')">
-        <div class="tariff-row">
-            <div class="radio"><div class="radio-dot"></div></div>
-            <span class="tariff-name">Standart</span>
-            <span class="tariff-price">: 3000 so'm</span>
-        </div>
-        <div class="tariff-stars">⭐</div>
-        <div class="tariff-desc">2024-yilgacha bo'lgan ma'lumotlar asosida. Oddiy mavzular uchun.</div>
-    </div>
- 
-    <div class="tariff-card" id="tariff-5000" onclick="selectTariff('5000')">
-        <div class="tariff-row">
-            <div class="radio"><div class="radio-dot"></div></div>
-            <span class="tariff-name">Premium</span>
-            <span class="tariff-price">: 5000 so'm</span>
-        </div>
-        <div class="tariff-stars">⭐⭐</div>
-        <div class="tariff-desc">Matn sifati yaxshilangan, 2025-yilgacha bo'lgan ma'lumotlar. Ilmiy mavzular uchun.</div>
-    </div>
- 
-    <div class="tariff-card" id="tariff-7000" onclick="selectTariff('7000')">
-        <div class="tariff-row">
-            <div class="radio"><div class="radio-dot"></div></div>
-            <span class="tariff-name">Yuqori Sifatli Premium</span>
-            <span class="tariff-price">: 7000 so'm</span>
-        </div>
-        <div class="tariff-stars">⭐⭐⭐</div>
-        <div class="tariff-desc">Eng kuchli model. Ilmiy manbalarga asoslangan. Tavsiya etilgan tarif.</div>
-    </div>
- 
-    <div class="divider"></div>
- 
-    <div class="section-title">Fayl formatini tanlang ❗</div>
- 
-    <div class="format-card selected" id="fmt-pptx" onclick="selectFormat('pptx')">
-        <div class="radio"><div class="radio-dot"></div></div>
-        <div class="format-text"><span>.pptx</span> — PowerPoint</div>
-    </div>
- 
-    <div class="format-card" id="fmt-pdf" onclick="selectFormat('pdf')">
-        <div class="radio"><div class="radio-dot"></div></div>
-        <div class="format-text"><span>.pdf</span> — PDF fayl</div>
-    </div>
- 
-    <div class="submit-wrap">
-        <button class="submit-btn" id="submitBtn" onclick="submitForm()">
-            ✅ Taqdimot yaratish
-        </button>
-    </div>
- 
-<script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-    tg.ready();
- 
-    let selectedTemplate = null; 
-    let selectedTariff   = "3000";
-    let selectedFormat   = "pptx";
- 
-    const templates = [
-        { name: "Brown History 3", size: "4-5 mb", cls: "tpl-1",  tc: "#fff" },
-        { name: "Brown History 2", size: "1 mb",   cls: "tpl-2",  tc: "#333" },
-        { name: "Flowers 3",       size: "5 mb",   cls: "tpl-3",  tc: "#555" },
-        { name: "Green World",     size: "4 mb",   cls: "tpl-4",  tc: "#fff" },
-        { name: "Biome",           size: "14 MB",  cls: "tpl-5",  tc: "#fff" },
-        { name: "Green Abstract",  size: "1 MB",   cls: "tpl-6",  tc: "#fff" },
-        { name: "Brown History",   size: "10-15 MB",cls: "tpl-7", tc: "#fff" },
-        { name: "White Blue",      size: "2-3 mb", cls: "tpl-8",  tc: "#333" },
-        { name: "Flowers 1",       size: "10 mb",  cls: "tpl-9",  tc: "#fff" },
-        { name: "Snow",            size: "10 mb",  cls: "tpl-10", tc: "#333" },
-    ];
- 
-    const grid = document.getElementById('templateGrid');
-    templates.forEach((t, i) => {
-        const n = i + 1;
-        const card = document.createElement('div');
-        card.className = 'tpl-card';
-        card.id = 'tpl-' + n;
-        card.onclick = () => selectTemplate(n);
-        card.innerHTML = `
-            <div class="tpl-preview ${t.cls}">
-                <div class="tpl-inner">
-                    <div style="font-size:9px;font-weight:700;color:${t.tc};opacity:0.9;line-height:1.3;">Taqdimot mavzusi</div>
-                    <div style="width:60%;height:2px;background:${t.tc};opacity:0.3;border-radius:1px;margin-top:4px;"></div>
-                    <div style="width:40%;height:2px;background:${t.tc};opacity:0.2;border-radius:1px;margin-top:2px;"></div>
-                    <div style="font-size:7px;color:${t.tc};opacity:0.6;margin-top:6px;">Reja:</div>
-                    <div style="width:80%;height:1px;background:${t.tc};opacity:0.2;margin-top:3px;"></div>
-                    <div style="width:70%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
-                    <div style="width:75%;height:1px;background:${t.tc};opacity:0.15;margin-top:2px;"></div>
-                </div>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H4zM8 20l4-4 4 4M8 9h8M8 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>SlideBot<span style="color:var(--cyan)">.</span></div>
+      <span class="top-meta">Taqdimot studiyasi</span>
+    </header>
+    <section class="hero" aria-labelledby="pageTitle">
+      <div class="hero-art" aria-hidden="true"></div>
+      <p class="eyebrow">G‘oyadan taqdimotgacha</p>
+      <h1 id="pageTitle">Mavzu sizdan.<br>Taqdimot bizdan.</h1>
+      <p>Mavzuni yozing, uslubni tanlang. Internet manbalari va haqiqiy rasmlar bilan taqdimotingizni tayyorlaymiz.</p>
+    </section>
+    <div id="previewNotice" class="notice" hidden>Ko‘rib chiqish rejimi. Buyurtma yuborish uchun ushbu sahifani Telegram botdagi «Taqdimot sozlamalari» tugmasidan oching.</div>
+    <div id="globalNotice" class="notice error-notice" role="alert" tabindex="-1" hidden></div>
+    <form id="presentationForm" novalidate>
+      <div class="workspace">
+        <div class="form-stack">
+          <section class="panel" aria-labelledby="contentTitle">
+            <div class="panel-head"><span class="step" aria-hidden="true">01</span><h2 id="contentTitle">Taqdimot haqida</h2></div>
+            <div class="field">
+              <div class="label-row"><label for="topic">Mavzu <span aria-hidden="true">*</span></label><span class="counter" id="topicCounter">0 / 150</span></div>
+              <textarea id="topic" maxlength="150" required placeholder="Masalan: Tarmoq xavfsizligi va kiberhujumlardan himoyalanish" aria-describedby="topicHint topicError"></textarea>
+              <p class="hint" id="topicHint">Fan nomi va asosiy yo‘nalishni qo‘shsangiz, mazmun aniqroq bo‘ladi.</p>
+              <p class="error" id="topicError" hidden>Mavzuni kiriting.</p>
             </div>
-            <div class="tpl-label">${t.name} · ${t.size}</div>
-        `;
-        grid.appendChild(card);
-    });
- 
-    const tgUser = tg.initDataUnsafe?.user;
-    if (tgUser) {
-        const def = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        if (def) document.getElementById('name').value = def;
+            <div class="field-grid">
+              <div class="field"><label for="name">Ism, familiya <span class="optional">ixtiyoriy</span></label><input type="text" id="name" maxlength="80" autocomplete="name" placeholder="Ismingiz"><p class="hint">Muqova sahifasi uchun.</p></div>
+              <div class="field"><label for="language">Taqdimot tili</label><select id="language"><option value="UZ">O‘zbekcha</option><option value="ENG">English</option><option value="RU">Русский</option><option value="ES">Español</option><option value="DE">Deutsch</option><option value="TOJ">Тоҷикӣ</option><option value="TUR">Türkçe</option></select></div>
+            </div>
+            <div class="field"><span class="label" id="countLabel">Slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel"></div><p class="hint">Muqova, reja va yakun sahifalari ham shu songa kiradi.</p></div>
+          </section>
+          <section class="panel" aria-labelledby="designTitle">
+            <div class="theme-head"><div class="panel-head"><span class="step" aria-hidden="true">02</span><h2 id="designTitle">Dizayn uslubi</h2></div><span class="badge">24 uslub</span></div>
+            <button type="button" class="auto-card" id="autoTheme" aria-pressed="true"><span class="auto-icon" aria-hidden="true">✧</span><span class="auto-text"><strong>Mavzuga mos tanlash</strong><small>Rang va uslubni mavzuga qarab tavsiya qilamiz</small></span><span class="selection-mark" aria-hidden="true">✓</span></button>
+            <label for="themeSearch" class="optional">Uslub qidirish</label><input type="search" class="theme-search" id="themeSearch" placeholder="Masalan: Ocean, tarix, tibbiyot…" autocomplete="off">
+            <div class="filters" id="themeFilters" role="group" aria-label="Uslub yo‘nalishi"></div>
+            <div class="theme-grid" id="themeGrid" role="group" aria-label="Taqdimot uslublari"></div>
+            <p id="emptyThemes" class="empty" role="status" hidden>Bu qidiruvga mos uslub topilmadi. Boshqa so‘z yozib ko‘ring.</p>
+            <p class="preview-note">Kartalar rang va uslub namunasidir. Yakuniy sahifalar mavzu, matn va rasmlarga mos joylashtiriladi.</p>
+          </section>
+          <section class="panel" aria-labelledby="planTitle">
+            <div class="panel-head"><span class="step" aria-hidden="true">03</span><h2 id="planTitle">Tadqiqot hajmi</h2></div>
+            <div class="plan-options" id="planOptions" role="group" aria-label="Taqdimot tarifi"></div>
+            <p class="hint">Barcha tariflarda internet manbalari va mavzuga mos rasmlar ishlatiladi.</p>
+          </section>
+          <section class="panel" aria-labelledby="formatTitle">
+            <div class="panel-head"><span class="step" aria-hidden="true">04</span><h2 id="formatTitle">Fayl formati</h2></div>
+            <div class="format-options" id="formatOptions" role="group" aria-label="Fayl formati">
+              <button type="button" class="format-button" data-format="pptx" aria-pressed="true"><span class="format-symbol" aria-hidden="true">PPT</span><span><strong>PowerPoint</strong><small>.pptx · tahrirlash uchun</small></span></button>
+              <button type="button" class="format-button" data-format="pdf" aria-pressed="false"><span class="format-symbol" aria-hidden="true">PDF</span><span><strong>PDF hujjat</strong><small>.pdf · o‘qish uchun</small></span></button>
+            </div>
+          </section>
+        </div>
+        <aside class="preview-column" aria-label="Buyurtma tafsilotlari">
+          <div class="preview-visual">
+            <div class="preview-label"><span><span class="live-dot"></span>Uslub namunasi</span><span>16 : 9</span></div>
+            <div class="deck-preview" id="deckPreview"><span class="deck-kicker">SlideBot / Presentation</span><h3 class="deck-topic" id="previewTopic">Sizning keyingi<br>taqdimotingiz</h3><span class="deck-rule"></span><span class="deck-author" id="previewAuthor">Muallif ismi</span></div>
+            <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer">Muqova ko‘rinishi uchun uslub namunasi.</p>
+          </div>
+          <div class="order-box">
+            <p class="order-title">Taqdimotingiz</p>
+            <div class="summary-line"><span>Hajmi va tili</span><span id="summaryDetails">10 slayd · O‘zbekcha</span></div>
+            <div class="summary-line"><span>Uslub</span><span id="summaryTheme">Mavzuga mos</span></div>
+            <div class="summary-line"><span>Tadqiqot</span><span id="summaryPlan">Standart</span></div>
+            <div class="summary-line"><span>Natija</span><span id="summaryFormat">PowerPoint (.pptx)</span></div>
+            <ul class="features"><li>Internet manbalari asosidagi mazmun</li><li>Mavzuga mos haqiqiy rasmlar</li><li>Manbalar va havolalar bilan</li></ul>
+            <div class="total"><span>Jami narx</span><strong><span id="totalPrice" style="font:inherit;color:inherit">3 000</span> <small>so‘m</small></strong></div>
+            <button class="submit" id="submitBtn" type="submit"><span id="submitLabel">Taqdimot yaratish</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <p class="delivery-note" id="deliveryNote">Narx bot balansingizdan yechiladi.<br>Tayyor fayl Telegram chatga yuboriladi.</p>
+          </div>
+        </aside>
+      </div>
+    </form>
+    <footer class="footer">SlideBot · O‘qish, izlanish va yangi g‘oyalar uchun.</footer>
+  </div>
+  <script>
+    'use strict';
+    // IDs are shared with the backend theme catalog. These cards show palettes, not final slide screenshots.
+    const themes = [
+      {id:'1',name:'Cyber Navy',group:'tech',tags:'kiber tarmoq xavfsizlik texnologiya',bg:'#0b1425',accent:'#36d5f3',fg:'#f2f7ff'},
+      {id:'2',name:'Ocean',group:'nature',tags:'okean dengiz suv geografiya',bg:'#062c46',accent:'#38bdf8',fg:'#edfaff'},
+      {id:'3',name:'Emerald',group:'business',tags:'biznes rivojlanish yashil',bg:'#082e2a',accent:'#34d399',fg:'#eefff8'},
+      {id:'4',name:'Violet',group:'creative',tags:'ijod zamonaviy binafsha',bg:'#24183f',accent:'#a78bfa',fg:'#faf5ff'},
+      {id:'5',name:'Amber',group:'business',tags:'sariq savdo marketing',bg:'#302315',accent:'#fbbf24',fg:'#fff9eb'},
+      {id:'6',name:'Rose',group:'creative',tags:'sanat adabiyot pushti',bg:'#351b2b',accent:'#fb8fa8',fg:'#fff1f6'},
+      {id:'7',name:'Slate',group:'business',tags:'kulrang korporativ boshqaruv',bg:'#202b38',accent:'#94b8d8',fg:'#f1f5f9'},
+      {id:'8',name:'Arctic',group:'minimal',tags:'oq och minimal toza',bg:'#eef5fa',accent:'#2586b7',fg:'#183348'},
+      {id:'9',name:'Sand',group:'minimal',tags:'qum och iliq madaniyat',bg:'#f1e8d8',accent:'#a8743b',fg:'#493924'},
+      {id:'10',name:'Forest',group:'nature',tags:'orman ekologiya tabiat',bg:'#102d24',accent:'#a3d88a',fg:'#f0f5e9'},
+      {id:'11',name:'Midnight',group:'tech',tags:'kosmos tun astronomiya',bg:'#0c1025',accent:'#7dd3fc',fg:'#eef2ff'},
+      {id:'12',name:'Coral',group:'creative',tags:'dizayn ijod qizil',bg:'#fff1eb',accent:'#dc674d',fg:'#442c29'},
+      {id:'13',name:'Medical',group:'science',tags:'tibbiyot salomatlik biologiya',bg:'#eef7f6',accent:'#098b86',fg:'#173e40'},
+      {id:'14',name:'Blueprint',group:'tech',tags:'muhandislik arxitektura loyiha',bg:'#12376a',accent:'#80d8ff',fg:'#eef8ff'},
+      {id:'15',name:'History',group:'education',tags:'tarix qadimgi madaniyat tarixiy',bg:'#f3ead9',accent:'#8f603b',fg:'#493924'},
+      {id:'16',name:'Science',group:'science',tags:'fan ilm kimyo fizika tadqiqot',bg:'#0d2538',accent:'#59e2d0',fg:'#edfcff'},
+      {id:'17',name:'Education',group:'education',tags:'talim maktab dars pedagogika',bg:'#f4f0ff',accent:'#7152c7',fg:'#353052'},
+      {id:'18',name:'Finance',group:'business',tags:'moliya iqtisod bank pul',bg:'#122724',accent:'#b5d46e',fg:'#f4f9ed'},
+      {id:'19',name:'Nature',group:'nature',tags:'tabiat osimlik ekologiya hayvon',bg:'#eaf1e4',accent:'#4e7d42',fg:'#2d442b'},
+      {id:'20',name:'Editorial',group:'creative',tags:'jurnal adabiyot matbuot',bg:'#f6f2ed',accent:'#be553b',fg:'#282926'},
+      {id:'21',name:'Indigo',group:'tech',tags:'raqamli informatika suniy intellekt',bg:'#1c2151',accent:'#a3a9ff',fg:'#f2f2ff'},
+      {id:'22',name:'Copper',group:'business',tags:'sanoat ishlab chiqarish mis',bg:'#2d201d',accent:'#e0a879',fg:'#fff3e8'},
+      {id:'23',name:'Lavender',group:'creative',tags:'psixologiya falsafa och binafsha',bg:'#f0eafb',accent:'#8b64ba',fg:'#403353'},
+      {id:'24',name:'Monochrome',group:'minimal',tags:'qora oq minimal rasmiy',bg:'#17191d',accent:'#f5f5f5',fg:'#f2f4f5'}
+    ];
+    const filters = [{id:'all',name:'Barchasi'},{id:'tech',name:'Texnologiya'},{id:'education',name:'Ta’lim'},{id:'business',name:'Biznes'},{id:'science',name:'Ilm-fan'},{id:'nature',name:'Tabiat'},{id:'creative',name:'Ijod'},{id:'minimal',name:'Minimal'}];
+    const languages = {UZ:'O‘zbekcha',ENG:'English',RU:'Русский',ES:'Español',DE:'Deutsch',TOJ:'Тоҷикӣ',TUR:'Türkçe'};
+    const counts = [5,10,15,20,25,30];
+    const plans = {3000:{name:'Standart',detail:'Asosiy manbalar va mavzuning muhim jihatlari'},5000:{name:'Batafsil',detail:'Kengroq manbalar va batafsilroq izlanish'},7000:{name:'Keng tadqiqot',detail:'Manba qidiruviga ko‘proq vaqt va kengroq qamrov'}};
+    const DRAFT_KEY = 'slidebot.presentation.v2';
+    const $ = id => document.getElementById(id);
+    const state = {template:'auto',slideCount:10,tariff:'3000',format:'pptx',filter:'all',pending:false,requestId:null,requestFingerprint:null};
+    let tg = null;
+    try { tg = window.Telegram && window.Telegram.WebApp; if(tg) { tg.ready(); tg.expand(); if(tg.setHeaderColor) tg.setHeaderColor('#080f1d'); if(tg.setBackgroundColor) tg.setBackgroundColor('#080f1d'); } } catch(error) { tg = null; }
+    // Keyboard-button Mini Apps can have empty initData; the Telegram platform still identifies the WebView.
+    const canSend = Boolean(tg && typeof tg.sendData === 'function' && (tg.initData || (tg.platform && tg.platform !== 'unknown')));
+    const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    const telegramName = tgUser ? [tgUser.first_name,tgUser.last_name].filter(Boolean).join(' ') : '';
+    if(telegramName) $('name').value = telegramName.slice(0,80);
+    $('previewNotice').hidden = canSend;
+    if(!canSend) { $('submitLabel').textContent = 'Telegram orqali yarating'; $('deliveryNote').textContent = 'Bu sahifa hozir ko‘rib chiqish rejimida.'; }
+
+    function normalized(value) { return value.toLocaleLowerCase().normalize('NFKD').replace(/[‘’ʻʼ'`]/g,'').replace(/[\u0300-\u036f]/g,''); }
+    function recommendedTheme() {
+      const topic = normalized($('topic').value);
+      const rules = [
+        [19,/oziq.ovqat|oziq ovqat|food security|agricultur|qishloq xojal|сельскохозяй/],
+        [1,/(kompyuter|computer|компьютер).*(virus|malware|вирус)|(virus|malware|вирус).*(kompyuter|computer|компьютер)/],
+        [1,/xavfsiz|cyber|security|tarmoq|network|кибер|безопас|сетев/],
+        [13,/tibb|sogliq|kasal|medic|health|virus|медиц|здоров|болез/],
+        [18,/moliya|iqtisod|bank|biznes|financ|econom|business|инвест|эконом|финанс/],
+        [15,/tarix|qadim|history|histor|ancient|истори|древн/],
+        [2,/okean|dengiz|ocean|marine|water|suv|океан|морск|водн/],
+        [19,/tabiat|ekolog|osimlik|nature|environment|ecolog|climat|природ|эколог/],
+        [17,/talim|maktab|pedagog|education|school|learning|образован|школ|обучен/],
+        [11,/kosmos|astronom|space|universe|космос|астрон/],
+        [16,/fizika|kimyo|biolog|science|physics|chemi|ilm|наук|физик|хими|биолог/],
+        [14,/qurilish|arxitekt|muhandis|engineer|architect|construct|архитект|строит|инженер/],
+        [20,/adabiyot|sanat|madani|literature|culture|design|искусств|культур|литератур/],
+        [21,/texnolog|suniy|intellekt|technology|artificial|software|технолог|интеллект/]
+      ];
+      const match = rules.find(rule => rule[1].test(topic));
+      return themes.find(theme => theme.id === String(match ? match[0] : 1));
     }
- 
-    function selectTemplate(n) {
-        document.querySelectorAll('.tpl-card').forEach(c => {
-            c.classList.remove('selected', 'error-tpl');
-        });
-        document.getElementById('tpl-' + n).classList.add('selected');
-        selectedTemplate = n;
-        document.getElementById('template-err').classList.remove('show');
+    function selectedTheme() { return state.template === 'auto' ? recommendedTheme() : themes.find(theme => theme.id === state.template) || themes[0]; }
+    function palette(theme) { return '--theme-bg:'+theme.bg+';--theme-accent:'+theme.accent+';--theme-fg:'+theme.fg; }
+    function renderThemes() {
+      const query = normalized($('themeSearch').value.trim());
+      const visible = themes.filter(theme => (state.filter === 'all' || theme.group === state.filter) && normalized(theme.name+' '+theme.tags).includes(query));
+      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+theme.name+' uslubini tanlash" aria-pressed="'+(state.template === theme.id)+'"><span class="mini-slide" style="'+palette(theme)+'" aria-hidden="true"><span class="mini-kicker"></span><span class="mini-title"></span><span class="mini-title short"></span><span class="mini-line"></span><span class="mini-orbit"></span></span><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+theme.name+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
+      $('emptyThemes').hidden = visible.length > 0;
     }
- 
-    function selectTariff(val) {
-        document.querySelectorAll('.tariff-card').forEach(c => c.classList.remove('selected'));
-        document.getElementById('tariff-' + val).classList.add('selected');
-        selectedTariff = val;
+    function updatePreview() {
+      const theme = selectedTheme();
+      $('deckPreview').setAttribute('style',palette(theme));
+      $('previewTopic').textContent = $('topic').value.trim() || 'Sizning keyingi taqdimotingiz';
+      $('previewAuthor').textContent = $('name').value.trim() || telegramName || 'Muallif ismi';
+      $('previewTheme').textContent = theme.name + (state.template === 'auto' ? ' · mavzuga mos' : '');
+      $('summaryTheme').textContent = state.template === 'auto' ? 'Mavzuga mos' : theme.name;
+      $('summaryDetails').textContent = state.slideCount+' slayd · '+languages[$('language').value];
+      $('summaryFormat').textContent = state.format === 'pdf' ? 'PDF (.pdf)' : 'PowerPoint (.pptx)';
+      $('summaryPlan').textContent = plans[state.tariff].name;
+      $('totalPrice').textContent = Number(state.tariff).toLocaleString('ru-RU').replace(/\u00a0/g,' ');
+      $('topicCounter').textContent = $('topic').value.length+' / 150';
+      $('autoTheme').setAttribute('aria-pressed',String(state.template === 'auto'));
+      document.querySelectorAll('[data-count]').forEach(button => button.setAttribute('aria-pressed',String(Number(button.dataset.count) === state.slideCount)));
+      document.querySelectorAll('[data-format]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.format === state.format)));
+      document.querySelectorAll('[data-tariff]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.tariff === state.tariff)));
     }
- 
-    function selectFormat(val) {
-        document.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
-        document.getElementById('fmt-' + val).classList.add('selected');
-        selectedFormat = val;
+    function saveDraft() {
+      try { localStorage.setItem(DRAFT_KEY,JSON.stringify({topic:$('topic').value,name:$('name').value,language:$('language').value,slideCount:state.slideCount,template:state.template,tariff:state.tariff,format:state.format})); } catch(error) { /* Storage may be unavailable in private WebViews. */ }
     }
- 
-    function clearErr(fieldId) {
-        const field = document.getElementById(fieldId);
-        const errEl = document.getElementById(fieldId + '-err');
-        if (field) field.classList.remove('error-field');
-        if (errEl) errEl.classList.remove('show');
-        document.getElementById('globalErr').classList.remove('show');
+    function restoreDraft() {
+      try {
+        const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+        if(!draft || typeof draft !== 'object') return;
+        if(typeof draft.topic === 'string') $('topic').value = draft.topic.slice(0,150);
+        if(typeof draft.name === 'string') $('name').value = draft.name.slice(0,80);
+        if(Object.prototype.hasOwnProperty.call(languages,draft.language)) $('language').value = draft.language;
+        if(counts.includes(Number(draft.slideCount))) state.slideCount = Number(draft.slideCount);
+        if(draft.template === 'auto' || themes.some(theme => theme.id === draft.template)) state.template = draft.template;
+        if(['pptx','pdf'].includes(draft.format)) state.format = draft.format;
+        if(Object.prototype.hasOwnProperty.call(plans,draft.tariff)) state.tariff = String(draft.tariff);
+      } catch(error) { /* Ignore obsolete or malformed drafts. */ }
     }
- 
-    function submitForm() {
-        const topic = document.getElementById('topic').value.trim();
-        const lang  = document.getElementById('language').value;
- 
-        let hasError = false;
-        const errors = [];
- 
-        if (!topic) {
-            document.getElementById('topic').classList.add('error-field');
-            document.getElementById('topic-err').classList.add('show');
-            document.getElementById('topic').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            errors.push('Mavzu');
-            hasError = true;
-        }
- 
-        if (!lang) {
-            document.getElementById('language').classList.add('error-field');
-            document.getElementById('language-err').classList.add('show');
-            if (!hasError) document.getElementById('language').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            errors.push('Til');
-            hasError = true;
-        }
- 
-        if (selectedTemplate === null) {
-            document.getElementById('template-err').classList.add('show');
-            document.querySelectorAll('.tpl-card').forEach(c => c.classList.add('error-tpl'));
-            if (!hasError) document.getElementById('templateGrid').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            errors.push('Shablon');
-            hasError = true;
-        }
- 
-        if (hasError) {
-            const errEl = document.getElementById('globalErr');
-            errEl.innerHTML = '⚠️ Quyidagilarni to\'liq kiriting: <strong>' + errors.join(', ') + '</strong>';
-            errEl.classList.add('show');
-            errEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-        }
- 
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⏳ Yuborilmoqda...';
- 
-        const name = document.getElementById('name').value.trim() ||
-                     (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Foydalanuvchi');
- 
-        const slideCount = document.getElementById('slideCount').value;
- 
-        tg.sendData(JSON.stringify({
-            topic:      topic,
-            name:       name,
-            language:   lang,
-            slideCount: slideCount,
-            template:   String(selectedTemplate),
-            tariff:     selectedTariff,
-            format:     selectedFormat
-        }));
+    function clearError() { $('topic').removeAttribute('aria-invalid'); $('topicError').hidden = true; $('globalNotice').hidden = true; }
+    function changed() { clearError(); updatePreview(); saveDraft(); }
+    function showNotice(message,success) { $('globalNotice').textContent = message; $('globalNotice').className = 'notice '+(success ? 'success' : 'error-notice'); $('globalNotice').hidden = false; $('globalNotice').focus(); }
+    function newRequestId() {
+      if(window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+      if(window.crypto && typeof window.crypto.getRandomValues === 'function') return 'slide-'+Array.from(window.crypto.getRandomValues(new Uint32Array(4)),part => part.toString(16).padStart(8,'0')).join('');
+      return 'slide-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
     }
-</script>
+    function resetSubmission() { state.pending = false; $('submitBtn').disabled = false; $('submitLabel').textContent = canSend ? 'Taqdimot yaratish' : 'Telegram orqali yarating'; }
+    function submitForm(event) {
+      if(event) event.preventDefault();
+      if(state.pending) return;
+      clearError();
+      const topic = $('topic').value.trim();
+      if(topic.length < 3) { $('topic').setAttribute('aria-invalid','true'); $('topicError').textContent = 'Mavzu kamida 3 belgidan iborat bo‘lsin.'; $('topicError').hidden = false; $('topic').focus(); return; }
+      if(topic.length > 150) { showNotice('Mavzu 150 belgidan oshmasin.'); return; }
+      if(!canSend) { showNotice('Buyurtma yuborish uchun sahifani Telegram botdagi taqdimot sozlamalari tugmasidan oching.'); return; }
+      const payload = {topic:topic,name:($('name').value.trim() || telegramName || 'Foydalanuvchi').slice(0,80),language:$('language').value,slideCount:String(state.slideCount),template:state.template,tariff:state.tariff,format:state.format};
+      const fingerprint = JSON.stringify(payload);
+      if(state.requestFingerprint !== fingerprint || !state.requestId) { state.requestId = newRequestId(); state.requestFingerprint = fingerprint; }
+      payload.requestId = state.requestId;
+      const data = JSON.stringify(payload);
+      const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(data).length : new Blob([data]).size;
+      if(bytes > 4096) { showNotice('Ma’lumot hajmi katta. Mavzu yoki ismni qisqartiring.'); return; }
+      state.pending = true;
+      $('submitBtn').disabled = true;
+      $('submitLabel').textContent = 'Botga yuborilmoqda…';
+      saveDraft();
+      try {
+        tg.sendData(data);
+        // sendData closes a keyboard-launched WebApp. If the bridge leaves it open, allow a safe retry with the same request ID.
+        window.setTimeout(function() { if(state.pending) { resetSubmission(); showNotice('Yuborish so‘rovi berildi. Natijani bot chatida tekshiring. Chatda buyurtma ko‘rinmasa, qayta urinishingiz mumkin.',true); } },8000);
+      } catch(error) { resetSubmission(); showNotice('Buyurtma yuborilmadi. Telegram ulanishini tekshirib, yana urinib ko‘ring.'); }
+    }
+
+    $('countOptions').innerHTML = counts.map(count => '<button type="button" class="count-button" data-count="'+count+'" aria-pressed="'+(count === state.slideCount)+'">'+count+'</button>').join('');
+    $('themeFilters').innerHTML = filters.map(filter => '<button type="button" class="filter" data-filter="'+filter.id+'" aria-pressed="'+(filter.id === state.filter)+'">'+filter.name+'</button>').join('');
+    $('planOptions').innerHTML = Object.keys(plans).map(tariff => '<button type="button" class="plan-button" data-tariff="'+tariff+'" aria-pressed="'+(tariff === state.tariff)+'"><span class="selection-mark" aria-hidden="true">✓</span><span class="plan-text"><strong>'+plans[tariff].name+'</strong><small>'+plans[tariff].detail+'</small></span><span class="plan-price">'+Number(tariff).toLocaleString('ru-RU')+' so‘m</span></button>').join('');
+    $('countOptions').addEventListener('click',event => { const button = event.target.closest('[data-count]'); if(button) { state.slideCount = Number(button.dataset.count); changed(); } });
+    $('formatOptions').addEventListener('click',event => { const button = event.target.closest('[data-format]'); if(button) { state.format = button.dataset.format; changed(); } });
+    $('planOptions').addEventListener('click',event => { const button = event.target.closest('[data-tariff]'); if(button) { state.tariff = button.dataset.tariff; changed(); } });
+    $('themeGrid').addEventListener('click',event => { const button = event.target.closest('[data-theme]'); if(button) { state.template = button.dataset.theme; renderThemes(); changed(); } });
+    $('autoTheme').addEventListener('click',() => { state.template = 'auto'; renderThemes(); changed(); });
+    $('themeFilters').addEventListener('click',event => { const button = event.target.closest('[data-filter]'); if(button) { state.filter = button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed',String(item.dataset.filter === state.filter))); renderThemes(); } });
+    $('themeSearch').addEventListener('input',renderThemes);
+    ['topic','name'].forEach(id => $(id).addEventListener('input',changed));
+    $('language').addEventListener('change',changed);
+    $('presentationForm').addEventListener('submit',submitForm);
+    restoreDraft();
+    renderThemes();
+    updatePreview();
+  </script>
 </body>
 </html>
