@@ -35,8 +35,9 @@ public class BalanceService {
     @Value("${payment.humo-card}")
     private String humoCard;
 
-    private static final String VISA_CARD  = "4916 9903 1125 6090";
-    private static final String CARD_OWNER = "JALILOV OZODBEK";
+    private static final String HUMO_CARD_OWNER = "JALILOV OZODBEK";
+    private static final String UZCARD_CARD     = "5614 6887 0893 0291";
+    private static final String UZCARD_OWNER    = "R. S";
 
     // To'lov tugmalari summalari
     private static final int[] AMOUNTS = {6000, 7000, 8000, 9000, 10000, 15000, 20000, 50000};
@@ -107,22 +108,22 @@ public class BalanceService {
         return switch (lang) {
             case "RU" -> "💰 <b>Ваш баланс:</b> " + user.getBalance() + " сум\n\n" +
                     "📕 <b>Цены:</b>\n" +
-                    "• Презентация 10-14 стр. — 5 000 сум\n" +
-                    "• Презентация 15-18 стр. — 7 000 сум\n" +
+                    "• Презентация — тарифы 5 000 / 7 000 сум\n" +
+                    "• 10 / 15 / 20 основных слайдов + 3 бонусных, PPTX\n" +
                     "• Тест — 5 000 сум\n" +
                     "• Реферат — 5 000 сум\n\n" +
                     "👇 Выберите сумму пополнения:";
             case "ENG" -> "💰 <b>Your balance:</b> " + user.getBalance() + " UZS\n\n" +
                     "📕 <b>Prices:</b>\n" +
-                    "• Presentation 10-14 pages — 5 000 UZS\n" +
-                    "• Presentation 15-18 pages — 7 000 UZS\n" +
+                    "• Presentation — plans 5 000 / 7 000 UZS\n" +
+                    "• 10 / 15 / 20 content slides + 3 bonus pages, PPTX\n" +
                     "• Test — 5 000 UZS\n" +
                     "• Essay — 5 000 UZS\n\n" +
                     "👇 Select top-up amount:";
             default -> "💰 <b>Balansingiz:</b> " + user.getBalance() + " so'm\n\n" +
                     "📕 <b>Narxlar:</b>\n" +
-                    "• Taqdimot 10-14 sahifa — 5 000 so'm\n" +
-                    "• Taqdimot 15-18 sahifa — 7 000 so'm\n" +
+                    "• Taqdimot — tariflar 5 000 / 7 000 so'm\n" +
+                    "• 10 / 15 / 20 asosiy slayd + 3 bonus sahifa, PPTX\n" +
                     "• Test — 5 000 so'm\n" +
                     "• Referat — 5 000 so'm\n\n" +
                     "👇 To'ldirish summasini tanlang:";
@@ -209,41 +210,15 @@ public class BalanceService {
 
         String inlineJson = """
             {"inline_keyboard":[
-              [{"text":"%s","callback_data":"PAY_AUTO_%d"}],
-              [{"text":"%s","callback_data":"PAY_BANK_%d"}]
+              [{"text":"%s","callback_data":"PAY_AUTO_%d","style":"primary"}],
+              [{"text":"%s","callback_data":"PAY_BANK_%d","style":"success"}]
             ]}
             """.formatted(
                 rawSender.esc(autoBtnText), baseAmount,
                 rawSender.esc(bankBtnText), baseAmount
         );
 
-        try {
-            SendMessage sm = new SendMessage(chatId.toString(), fullText);
-            sm.setParseMode("HTML");
-            Message sent = bot.execute(sm);
-
-            // Edit to add inline keyboard
-            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup editMarkup =
-                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup();
-            editMarkup.setChatId(chatId.toString());
-            editMarkup.setMessageId(sent.getMessageId());
-            editMarkup.setReplyMarkup(buildAutoPayInlineMarkup(autoBtnText, baseAmount, bankBtnText));
-            bot.execute(editMarkup);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private InlineKeyboardMarkup buildAutoPayInlineMarkup(String autoBtnText, int baseAmount, String bankBtnText) {
-        InlineKeyboardButton autoBtn = InlineKeyboardButton.builder()
-                .text(autoBtnText)
-                .callbackData("PAY_AUTO_" + baseAmount)
-                .build();
-        InlineKeyboardButton bankBtn = InlineKeyboardButton.builder()
-                .text(bankBtnText)
-                .callbackData("PAY_BANK_" + baseAmount)
-                .build();
-        return new InlineKeyboardMarkup(List.of(List.of(autoBtn), List.of(bankBtn)));
+        rawSender.sendInlineMessage(bot, chatId.toString(), fullText, inlineJson);
     }
 
     // =====================================================================
@@ -296,7 +271,7 @@ public class BalanceService {
                     "💰 <b>Сумма перевода:</b> <code>" + pendingAmount + "</code>" + sumSuffix + " <i>(нажмите чтобы скопировать)</i>\n" +
                     "🎁 Бонус: +0 сум\n\n" +
                     "🔢 <b>Номер карты:</b> <code>" + humoCard + "</code>\n" +
-                    "👤 <b>Владелец:</b> <code>" + CARD_OWNER + "</code>\n\n" +
+                    "👤 <b>Владелец:</b> <code>" + HUMO_CARD_OWNER + "</code>\n\n" +
                     "<blockquote>⚠️ <b>ВНИМАНИЕ:</b> Переведите ровно <b>" + pendingAmount + "</b>" + sumSuffix + " (ни на 1 сум меньше или больше)!\n" +
                     "⚡ После оплаты баланс пополнится автоматически за 1 секунду.\n\n" +
                     "⏳ У вас есть <b>4 минуты</b>. Если не оплатите — сумма будет отменена!</blockquote>";
@@ -304,7 +279,7 @@ public class BalanceService {
                     "💰 <b>Transfer amount:</b> <code>" + pendingAmount + "</code>" + sumSuffix + " <i>(tap to copy)</i>\n" +
                     "🎁 Bonus: +0 UZS\n\n" +
                     "🔢 <b>Card number:</b> <code>" + humoCard + "</code>\n" +
-                    "👤 <b>Card owner:</b> <code>" + CARD_OWNER + "</code>\n\n" +
+                    "👤 <b>Card owner:</b> <code>" + HUMO_CARD_OWNER + "</code>\n\n" +
                     "<blockquote>⚠️ <b>ATTENTION:</b> Transfer exactly <b>" + pendingAmount + "</b>" + sumSuffix + " (not 1 UZS less or more)!\n" +
                     "⚡ Balance will be topped up automatically within 1 second after payment.\n\n" +
                     "⏳ You have <b>4 minutes</b>. If you don't pay — the amount will be cancelled!</blockquote>";
@@ -312,7 +287,7 @@ public class BalanceService {
                     "💰 <b>O'tkazish summasi:</b> <code>" + pendingAmount + "</code>" + sumSuffix + " <i>(nusxalash uchun bosing)</i>\n" +
                     "🎁 Bonus: +0 so'm\n\n" +
                     "🔢 <b>Karta raqami:</b> <code>" + humoCard + "</code>\n" +
-                    "👤 <b>Karta egasi:</b> <code>" + CARD_OWNER + "</code>\n\n" +
+                    "👤 <b>Karta egasi:</b> <code>" + HUMO_CARD_OWNER + "</code>\n\n" +
                     "<blockquote>⚠️ <b>DIQQAT:</b> Aynan ko'rsatilgan <b>" + pendingAmount + "</b>" + sumSuffix + " o'tkazing (1 so'm kam ham, ko'p ham emas)!\n" +
                     "⚡ To'lov amalga oshishi bilan balansingiz 1 soniyada avtomatik to'ldiriladi.\n\n" +
                     "⏳ To'lov uchun <b>4 daqiqa</b> vaqtingiz bor. Shu vaqt ichida to'lov qilmasangiz summa bekor qilinadi!</blockquote>";
@@ -388,32 +363,32 @@ public class BalanceService {
                     "Сумма оплаты: " + formattedAmount + " <i>(нажмите чтобы скопировать)</i>\n\n" +
                     "Переведите оплату на карту ниже и сделайте скриншот чека:\n" +
                     "<i>(Нажмите на номер карты, чтобы скопировать)</i>\n\n" +
-                    "💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
+                    "<blockquote>💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
+                    "👤 " + HUMO_CARD_OWNER + "</blockquote>\n" +
                     "❕ Если есть проблема с этой картой:\n\n" +
-                    "💳 <b>VISA Card:</b>\n<code>" + VISA_CARD + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
-                    "🧾 После оплаты отправьте чек 👇";
+                    "<blockquote>💳 <b>Uzcard:</b>\n<code>" + UZCARD_CARD + "</code>\n" +
+                    "👤 " + UZCARD_OWNER + "</blockquote>\n" +
+                    "<blockquote>🧾 После оплаты отправьте чек 👇</blockquote>";
             case "ENG" -> "💳 <b>Bank card payment</b>\n\n" +
                     "Payment amount: " + formattedAmount + " <i>(tap to copy)</i>\n\n" +
                     "Send payment to the card below and take a screenshot:\n" +
                     "<i>(Tap on card number to copy)</i>\n\n" +
-                    "💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
+                    "<blockquote>💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
+                    "👤 " + HUMO_CARD_OWNER + "</blockquote>\n" +
                     "❕ If there's a problem with this card:\n\n" +
-                    "💳 <b>VISA Card:</b>\n<code>" + VISA_CARD + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
-                    "🧾 After payment, send the receipt 👇";
+                    "<blockquote>💳 <b>Uzcard:</b>\n<code>" + UZCARD_CARD + "</code>\n" +
+                    "👤 " + UZCARD_OWNER + "</blockquote>\n" +
+                    "<blockquote>🧾 After payment, send the receipt 👇</blockquote>";
             default -> "💳 <b>Bank kartasi orqali to'lov</b>\n\n" +
                     "To'lov summasi: " + formattedAmount + " <i>(nusxalash uchun bosing)</i>\n\n" +
                     "Quyidagi karta raqamiga to'lov qiling va chekni skreenshot qiling:\n" +
                     "<i>(COPY qilish uchun karta raqami ustiga bosing)</i>\n\n" +
-                    "💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
+                    "<blockquote>💳 <b>HUMO Card:</b>\n<code>" + humoCard + "</code>\n" +
+                    "👤 " + HUMO_CARD_OWNER + "</blockquote>\n" +
                     "❕ Ushbu kartaga to'lovda muammo bo'lsa:\n\n" +
-                    "💳 <b>VISA Card:</b>\n<code>" + VISA_CARD + "</code>\n" +
-                    "👤 " + CARD_OWNER + "\n\n" +
-                    "🧾 To'lov qilganingizdan so'ng chekni yuboring 👇";
+                    "<blockquote>💳 <b>Uzcard:</b>\n<code>" + UZCARD_CARD + "</code>\n" +
+                    "👤 " + UZCARD_OWNER + "</blockquote>\n" +
+                    "<blockquote>🧾 To'lov qilganingizdan so'ng /chek buyrug'ini yuboring yoki quyidagi tugmani bosing👇</blockquote>";
         };
 
         String checkBtnText = switch (language) {
@@ -422,31 +397,10 @@ public class BalanceService {
             default -> "📝 Chekni yuborish";
         };
 
-        InlineKeyboardButton sendCheckBtn = InlineKeyboardButton.builder()
-                .text(checkBtnText)
-                .callbackData("SEND_CHECK")
-                .build();
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(List.of(sendCheckBtn)));
-
-        try {
-            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText editText =
-                    org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText.builder()
-                            .chatId(chatId.toString())
-                            .messageId(callbackMsgId)
-                            .text(mainText)
-                            .parseMode("HTML")
-                            .replyMarkup(markup)
-                            .build();
-            bot.execute(editText);
-        } catch (Exception e) {
-            try {
-                SendMessage sm = new SendMessage(chatId.toString(), mainText);
-                sm.setParseMode("HTML");
-                sm.setReplyMarkup(markup);
-                bot.execute(sm);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
+        if (callbackMsgId != null) {
+            rawSender.editMessageTextWithStyledCallbackBtn(bot, chatId.toString(), callbackMsgId, mainText, checkBtnText, "SEND_CHECK", "primary");
+        } else {
+            rawSender.sendMessageWithStyledCallbackBtn(bot, chatId.toString(), mainText, checkBtnText, "SEND_CHECK", "primary");
         }
     }
 

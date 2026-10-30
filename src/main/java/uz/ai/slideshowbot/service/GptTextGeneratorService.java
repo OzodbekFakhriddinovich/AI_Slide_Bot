@@ -1,5 +1,6 @@
 package uz.ai.slideshowbot.service;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
@@ -12,17 +13,17 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class GptTextGeneratorService {
 
-    @Value("${gemini.api.keys}")
+    @Value("${gemini.api.keys:}")
     private String apiKeysRaw;
 
     private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     private final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(180, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
@@ -37,7 +38,7 @@ public class GptTextGeneratorService {
                 .toList();
     }
 
-    public String callGemini(String prompt) throws Exception {
+    public String callGemini(String prompt, boolean isJson) throws Exception {
         List<String> keys = getApiKeys();
         if (keys.isEmpty()) {
             throw new RuntimeException("Gemini API key topilmadi! application.yml ni tekshiring.");
@@ -46,12 +47,15 @@ public class GptTextGeneratorService {
         String key = keys.get(0);
         String url = GEMINI_URL + key;
 
-        String jsonReq = mapper.writeValueAsString(Map.of(
-                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt))))
-        ));
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+        if (isJson) {
+            reqMap.put("generationConfig", Map.of("response_mime_type", "application/json"));
+        }
+        String jsonReq = mapper.writeValueAsString(reqMap);
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            System.out.println("🔑 Gemini 2.5 Pro urinish " + attempt + "/" + MAX_ATTEMPTS);
+            System.out.println("🔑 Gemini 3.5 Flash urinish " + attempt + "/" + MAX_ATTEMPTS);
 
             try {
                 RequestBody body = RequestBody.create(jsonReq, MediaType.get("application/json"));
@@ -91,7 +95,6 @@ public class GptTextGeneratorService {
     public List<Section> generateSections(String topic, int slideCount,
                                           String language, int tariff) {
         int sectionCount = slideCount <= 10 ? 3 : slideCount <= 15 ? 4 : 5;
-
         String lang = (language != null) ? language : "UZ";
 
         String yearNote = switch (tariff) {
@@ -148,23 +151,35 @@ public class GptTextGeneratorService {
         """, topic, langNote, yearNote, sectionCount, sectionCount);
 
         try {
-            String rb = callGemini(prompt);
+            String rb = callGemini(prompt, true);
 
             JsonNode root = mapper.readTree(rb);
             String rawText = root.path("candidates").get(0)
                     .path("content").path("parts").get(0).path("text").asText();
 
-            // Kuchli tozalash
             String clean = rawText.trim()
-                    .replaceAll("(?s)```json\\s*", "")
-                    .replaceAll("```", "")
-                    .replaceAll("(?s)\\\\n", " ")
+                    .replaceAll("(?s)<thinking>.*?</thinking>", "")
                     .trim();
+
+            if (clean.startsWith("```json")) {
+                clean = clean.substring(7);
+            } else if (clean.startsWith("```")) {
+                clean = clean.substring(3);
+            }
+            if (clean.endsWith("```")) {
+                clean = clean.substring(0, clean.length() - 3);
+            }
+            clean = clean.trim();
 
             int s = clean.indexOf('['), e = clean.lastIndexOf(']');
             if (s >= 0 && e > s) clean = clean.substring(s, e + 1);
 
-            JsonNode arr = mapper.readTree(clean);
+            ObjectMapper flexMapper = new ObjectMapper();
+            flexMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
+            flexMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);
+            flexMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+            JsonNode arr = flexMapper.readTree(clean);
             List<Section> sections = new ArrayList<>();
 
             for (JsonNode node : arr) {
@@ -177,7 +192,6 @@ public class GptTextGeneratorService {
 
                     sc.title = sn.path("title").asText(secTitle);
 
-                    // Bo'sh bo'lsa — avtomatik to'ldirish
                     sc.bullets = new ArrayList<>();
                     JsonNode bn = sn.path("bullets");
                     if (bn.isArray() && bn.size() >= 3) {
@@ -199,7 +213,27 @@ public class GptTextGeneratorService {
 
         } catch (Exception ex) {
             System.err.println("generateSections xato: " + ex.getMessage());
-            throw new RuntimeException("Section generatsiya xatosi: " + ex.getMessage());
+            ex.printStackTrace();
+
+            List<Section> fallbackSections = new ArrayList<>();
+            for (int i = 1; i <= sectionCount; i++) {
+                String secTitle = topic + " — " + i + "-qism";
+                List<SlideContent> slides = new ArrayList<>();
+                for (int j = 1; j <= 3; j++) {
+                    SlideContent sc = new SlideContent();
+                    sc.title = topic + ": " + i + "." + j + "-slayd";
+                    sc.bullets = List.of(
+                            topic + " bo'yicha asosiy tushunchalar va ta'riflar",
+                            "Zamonaviy yondashuvlar va sohadagi so'nggi tadqiqotlar",
+                            "Amaliy qo'llanish sohalari va texnik imkoniyatlar",
+                            "Xulosalar, erishilgan natijalar va kelajak istiqbollari"
+                    );
+                    sc.imageQuery = topic + " presentation background, 4k realistic";
+                    slides.add(sc);
+                }
+                fallbackSections.add(new Section(secTitle, slides));
+            }
+            return fallbackSections;
         }
     }
 

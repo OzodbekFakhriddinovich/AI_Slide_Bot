@@ -1,7 +1,8 @@
 package uz.ai.slideshowbot.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.annotation.PreDestroy;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
@@ -11,209 +12,287 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import uz.ai.slideshowbot.bot.SlideBot;
+import uz.ai.slideshowbot.entity.SlideOrderEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
-import uz.ai.slideshowbot.enums.UserState;
-import uz.ai.slideshowbot.repository.UserRepository;
+import uz.ai.slideshowbot.slides.SlideDeck;
+import uz.ai.slideshowbot.slides.SlideRequest;
+import java.io.IOException;
+import java.nio.file.*;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.*;
 
-import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-
+/** The WebApp order pipeline. Work is bounded; balances never travel inside worker entities. */
 @Service
 public class SlideFlowSingleService {
+    private final SlideOrderService orders;
+    private final SlidePlanningService planner;
+    private final PptxCreatorService pptx;
+    private final ObjectMapper json = new ObjectMapper();
+    private final ScheduledExecutorService progressClock = Executors.newSingleThreadScheduledExecutor(task -> {
+        Thread thread = new Thread(task, "slide-progress-clock"); thread.setDaemon(true); return thread;
+    });
+    private final ThreadPoolExecutor workers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(8), task -> {
+                Thread thread = new Thread(task, "slide-order-worker");
+                thread.setDaemon(true);
+                return thread;
+            }, new ThreadPoolExecutor.AbortPolicy());
 
-    @Autowired private UserRepository userRepository;
-    @Autowired private GptTextGeneratorService gptService;
-    @Autowired private PptxCreatorService pptxService;
-    @Autowired private TelegramRawSender rawSender;
+    public SlideFlowSingleService(SlideOrderService orders, SlidePlanningService planner,
+                                  PptxCreatorService pptx, SlideExportService exporter) {
+        this.orders = orders;
+        this.planner = planner;
+        this.pptx = pptx;
+    }
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @SuppressWarnings("unchecked")
     public void handleWebAppData(UserEntity user, Message message, SlideBot bot) {
-        Long   chatId = message.getChatId();
-        String lang   = (user.getLanguage() != null) ? user.getLanguage() : "UZ";
-
+        Long chatId = message.getChatId();
+        String language = user.getLanguage() == null ? "UZ" : user.getLanguage();
         try {
-            String              jsonData = message.getWebAppData().getData();
-            Map<String, Object> data     = objectMapper.readValue(jsonData, Map.class);
-
-            String topic         = String.valueOf(data.getOrDefault("topic", "")).trim();
-            String name          = String.valueOf(data.getOrDefault("name",
-                    user.getFirstName() != null ? user.getFirstName() : "Foydalanuvchi")).trim();
-            String slideLanguage = String.valueOf(data.getOrDefault("language", "UZ"));
-            int    slideCount    = parseIntSafe(data.get("slideCount"), 10);
-            String templateNum   = String.valueOf(data.getOrDefault("template", "1"));
-            int    cost          = parseIntSafe(data.get("tariff"), 5000);
-
-            if (topic.isEmpty()) {
-                sendMsg(bot, chatId, "❌ Mavzu kiritilishi shart!");
+            String raw = message.getWebAppData().getData();
+            if (raw == null || raw.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 4096)
+                throw new IllegalArgumentException("Forma ma'lumoti noto'g'ri. Web appni qayta oching.");
+            SlideRequest request = SlideRequest.from(json.readTree(raw), user.getFirstName(),
+                    "legacy_" + chatId + "_" + message.getMessageId());
+            if (workers.getQueue().remainingCapacity() == 0) {
+                send(bot, chatId, localized(language, "Hozir buyurtmalar ko'p. Birozdan so'ng qayta urinib ko'ring.",
+                        "Сейчас много заказов. Попробуйте немного позже.", "The queue is full. Please try again shortly."));
                 return;
             }
-
-            if (user.getBalance() == null || user.getBalance() < cost) {
-                String err = switch (lang) {
-                    case "RU"  -> "❌ Недостаточно средств!\n\n💰 Баланс: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " сум</b>\n💳 Нужно: <b>" + cost + " сум</b>";
-                    case "ENG" -> "❌ Insufficient balance!\n\n💰 Balance: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " UZS</b>\n💳 Required: <b>" + cost + " UZS</b>";
-                    default    -> "❌ Balansingiz yetarli emas!\n\n💰 Balans: <b>" + (user.getBalance() != null ? user.getBalance() : 0) + " so'm</b>\n💳 Kerak: <b>" + cost + " so'm</b>";
-                };
-                String buyBtn = switch (lang) {
-                    case "RU"  -> "💳 Пополнить баланс";
-                    case "ENG" -> "💳 Top up balance";
-                    default    -> "💳 Balansni to'ldirish";
-                };
-                String markup = "{\"inline_keyboard\":[[{\"text\":\"%s\",\"callback_data\":\"BALANCE_PAY\",\"style\":\"success\"}]]}"
-                        .formatted(rawSender.esc(buyBtn));
-                rawSender.sendInlineMessage(bot, chatId.toString(), err, markup);
+            SlideOrderEntity order = orders.reserve(chatId, request);
+            send(bot, chatId, localized(language,
+                    "💰 Balansingizdan " + order.getCost() + " so'm yechildi.",
+                    "💰 С баланса списано " + order.getCost() + " сум.",
+                    "💰 " + order.getCost() + " UZS deducted from your balance."));
+            Message waiting = send(bot, chatId, localized(language,
+                    "⌛ Kuting! Taqdimot tayyorlanmoqda...",
+                    "⌛ Подождите! Презентация создаётся...", "⌛ Please wait! Preparing your presentation..."));
+            OrderProgress progress;
+            try {
+                progress = new OrderProgress(bot, chatId, language, waiting == null ? null : waiting.getMessageId());
+            } catch (RejectedExecutionException e) {
+                orders.refund(order.getId());
+                if (waiting != null) removeProgress(bot, chatId, waiting.getMessageId());
+                send(bot, chatId, "Bot yangilanmoqda. Mablag' to'liq qaytarildi. Birozdan so'ng qayta urinib ko'ring.");
                 return;
             }
-
-            user.setBalance(user.getBalance() - cost);
-            user.setState(UserState.CREATING_SLIDES);
-            userRepository.save(user);
-
-            sendMsg(bot, chatId, "💰 Balansingizdan " + cost + " so'm yechildi.");
-            sendMsg(bot, chatId, switch (lang) {
-                case "RU"  -> "⏳ Подождите! Готовим презентацию...";
-                case "ENG" -> "⏳ Please wait! Preparing presentation...";
-                default    -> "⏳ Kuting! Taqdimot tayyorlanmoqda...";
-            });
-
-            Message progressMsg = sendProgressBar(bot, chatId);
-
-            new Thread(() -> {
-                CountDownLatch               latch      = new CountDownLatch(1);
-                AtomicReference<String>      pptxRef    = new AtomicReference<>(null);
-                AtomicReference<Exception>   errRef     = new AtomicReference<>(null);
-
-                Thread progressThread = new Thread(() -> {
-                    final int TOTAL_SECONDS = 60;
-                    final int STEPS = 30;
-                    final int DELAY_MS = TOTAL_SECONDS * 1000 / STEPS;
-
-                    String label = switch (lang) {
-                        case "RU"  -> "⏳ Taqdimot tayyorlanmoqda...";
-                        case "ENG" -> "⏳ Preparing presentation...";
-                        default    -> "⏳ Taqdimot tayyorlanmoqda...";
-                    };
-
-                    for (int i = 1; i <= STEPS; i++) {
-                        if (latch.getCount() == 0) break;
-
-                        int percent = (i * 100) / STEPS;
-                        String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                                + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
-
-                        try {
-                            EditMessageText e = new EditMessageText();
-                            e.setChatId(chatId.toString());
-                            e.setMessageId(progressMsg.getMessageId());
-                            e.setText(label + "\n" + bar + " " + percent + "%");
-                            bot.execute(e);
-                        } catch (Exception ignored) {}
-
-                        try { Thread.sleep(DELAY_MS); }
-                        catch (InterruptedException ex) { break; }
-                    }
-
-                    try {
-                        bot.execute(new DeleteMessage(chatId.toString(), progressMsg.getMessageId()));
-                    } catch (Exception ignored) {}
-                });
-
-                Thread workThread = new Thread(() -> {
-                    try {
-                        List<GptTextGeneratorService.Section> sections =
-                                gptService.generateSections(topic, slideCount, slideLanguage, cost);
-                        String path = pptxService.createPptxFromSections(
-                                topic, name, "", sections, templateNum, slideLanguage);
-                        pptxRef.set(path);
-                    } catch (Exception e) {
-                        errRef.set(e);
-                        e.printStackTrace();
-                    } finally {
-                        latch.countDown();
-                        progressThread.interrupt();
-                    }
-                });
-
-                progressThread.setDaemon(true);
-                progressThread.start();
-                workThread.start();
-
-                try { latch.await(); } catch (InterruptedException ignored) {}
-                try { progressThread.join(3000); } catch (InterruptedException ignored) {}
-
-                if (errRef.get() != null) {
-                    sendMsg(bot, chatId, switch (lang) {
-                        case "RU"  -> "❌ Произошла ошибка. Средства возвращены.";
-                        case "ENG" -> "❌ Error occurred. Funds returned.";
-                        default    -> "❌ Xatolik yuz berdi. Mablag' qaytarildi.";
-                    });
-                    user.setBalance(user.getBalance() + cost);
-                } else {
-                    String path = pptxRef.get();
-                    if (path != null) {
-                        File file = new File(path);
-                        if (file.exists()) {
-                            try {
-                                SendDocument doc = new SendDocument();
-                                doc.setChatId(chatId.toString());
-                                doc.setDocument(new InputFile(file));
-                                doc.setCaption(switch (lang) {
-                                    case "RU"  -> "📕 Ваша презентация готова!\n\n📌 Тема: " + topic + "\n\nБот для презентаций и PDF: @AI_Slide_Assistant_Bot";
-                                    case "ENG" -> "📕 Your presentation is ready!\n\n📌 Topic: " + topic + "\n\nPresentation and PDF bot: @AI_Slide_Assistant_Bot";
-                                    default    -> "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + topic + "\n\nTaqdimot va pdf tayyorlovchi bot: @AI_Slide_Assistant_Bot";
-                                });
-                                bot.execute(doc);
-                                file.delete();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                sendMsg(bot, chatId, "❌ Fayl yuborishda xatolik.");
-                                user.setBalance(user.getBalance() + cost);
-                            }
-                        }
-                    }
-                }
-
-                user.setState(UserState.START);
-                userRepository.save(user);
-
-            }).start();
-
+            try {
+                workers.execute(() -> createAndSend(order, request, language, progress, bot));
+            } catch (RejectedExecutionException e) {
+                orders.refund(order.getId());
+                progress.close();
+                send(bot, chatId, "Navbat band. Mablag' qaytarildi. Birozdan so'ng qayta urinib ko'ring.");
+            }
+        } catch (SlideOrderService.InsufficientBalanceException e) {
+            try { bot.execute(insufficientBalanceMessage(chatId, language, e.balance(), e.required())); }
+            catch (Exception ignored) {}
+        } catch (IllegalArgumentException e) {
+            send(bot, chatId, e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            sendMsg(bot, chatId, "❌ Ma'lumotlarni qayta ishlashda xatolik.");
+            System.err.println("Slide order rejected: " + e.getClass().getSimpleName());
+            send(bot, chatId, localized(language, "Buyurtmani qabul qilib bo'lmadi. Qayta urinib ko'ring.",
+                    "Не удалось принять заказ. Попробуйте снова.", "Could not accept the order. Please try again."));
         }
     }
 
-    private Message sendProgressBar(SlideBot bot, Long chatId) {
+    private void createAndSend(SlideOrderEntity order, SlideRequest request, String language,
+                               OrderProgress progress, SlideBot bot) {
+        Long chatId = order.getChatId();
+        List<Path> temporaryFiles = new ArrayList<>();
+        boolean delivered = false;
         try {
-            return bot.execute(new SendMessage(chatId.toString(),
-                    "⏳ Yuklanmoqda ... 0%\n░░░░░░░░░░░░░░░░░░░░"));
-        } catch (Exception e) { return null; }
+            if (!orders.touch(order.getId())) return;
+            SlideDeck deck = planner.createDeck(request.topic(), request.slideCount(), request.language(), request.tariff());
+            validateDeck(deck, request.slideCount() + 3);
+            if (deck.slides().get(0).layout() != SlideDeck.Layout.COVER
+                    || deck.slides().get(1).layout() != SlideDeck.Layout.AGENDA)
+                throw new IOException("Cover and agenda must precede the content");
+            if (!orders.touch(order.getId())) return;
+            progress.stage(localized(language,
+                    "Manbalar topildi. Slaydlar va mavzuga mos rasmlar tayyorlanmoqda...",
+                    "Материалы найдены. Готовим слайды и тематические изображения...",
+                    "Sources found. Composing slides and finding relevant images..."));
+            Path pptxFile = Path.of(pptx.createPptx(deck, request.name(), request.template()));
+            temporaryFiles.add(pptxFile);
+            requireFile(pptxFile);
+            Path result = pptxFile;
+            if (!orders.touch(order.getId())) return;
+            progress.ready();
+            SendDocument document = new SendDocument();
+            document.setChatId(chatId.toString());
+            document.setDocument(new InputFile(result.toFile()));
+            document.setCaption(localized(language,
+                    "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + request.topic() + "\n" + request.slideCount() + " asosiy + 3 bonus = " + deck.slides().size() + " slayd\n\nTaqdimot tayyorlovchi bot: @AI_Slide_Assistant_Bot",
+                    "Презентация готова!\n\n" + request.topic() + "\nСлайдов: " + deck.slides().size() + "\nИсточники текста и изображений указаны в файле.",
+                    "Your presentation is ready!\n\n" + request.topic() + "\n" + deck.slides().size() + " slides\nText and image sources are included in the file."));
+            bot.execute(document);
+            delivered = true;
+            orders.complete(order.getId());
+        } catch (Exception e) {
+            System.err.println("Slide creation failed (" + order.getId() + "): " + e.getClass().getSimpleName());
+            if (!delivered) {
+                boolean refunded = orders.refund(order.getId());
+                if (refunded) send(bot, chatId, localized(language,
+                        "Taqdimotni tayyorlashda manba yoki ulanish xatosi yuz berdi. " + order.getCost() + " so'm to'liq qaytarildi.\nBirozdan so'ng qayta urinib ko'ring.",
+                        "Не удалось завершить презентацию из-за ошибки источника или соединения. Возвращено " + order.getCost() + " сум. Попробуйте ещё раз позже.",
+                        "A source or connection error interrupted the presentation. " + order.getCost() + " UZS fully refunded. Please try again shortly."));
+            } else {
+                try { orders.complete(order.getId()); }
+                catch (Exception persistenceError) {
+                    System.err.println("Delivered slide receipt requires recovery: " + order.getId());
+                }
+            }
+        } finally {
+            progress.close();
+            for (Path file : temporaryFiles) {
+                try { Files.deleteIfExists(file); }
+                catch (IOException ignored) { System.err.println("Could not remove temporary slide file."); }
+            }
+        }
     }
 
-    private void sendMsg(SlideBot bot, Long chatId, String text) {
-        try { bot.execute(new SendMessage(chatId.toString(), text)); }
-        catch (Exception e) { e.printStackTrace(); }
+    static void validateDeck(SlideDeck deck, int expected) throws IOException {
+        if (deck == null || deck.slides().size() != expected) throw new IOException("Slide count mismatch");
+        Set<String> titles = new HashSet<>();
+        Set<String> points = new HashSet<>();
+        for (SlideDeck.Slide slide : deck.slides()) {
+            if (slide.title().isBlank() || !titles.add(normalize(slide.title())))
+                throw new IOException("Duplicate or missing slide title");
+            if (slide.layout() != SlideDeck.Layout.COVER && slide.bullets().isEmpty())
+                throw new IOException("Empty content slide");
+            if (slide.layout() != SlideDeck.Layout.COVER && slide.layout() != SlideDeck.Layout.AGENDA && slide.sources().isEmpty())
+                throw new IOException("Content slide without sources");
+            if (slide.layout() == SlideDeck.Layout.AGENDA) continue;
+            for (String point : slide.bullets()) {
+                if (point == null || point.isBlank() || !points.add(normalize(point)))
+                    throw new IOException("Duplicate or missing slide content");
+            }
+        }
     }
 
-    private int parseIntSafe(Object val, int def) {
-        if (val==null) return def;
-        try { return Integer.parseInt(String.valueOf(val)); } catch (Exception e) { return def; }
+    private static String normalize(String text) {
+        return text.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");
+    }
+
+    private static void requireFile(Path file) throws IOException {
+        if (!Files.isRegularFile(file) || Files.size(file) == 0 || Files.size(file) > 49L * 1024 * 1024)
+            throw new IOException("Missing, empty or oversized presentation");
+    }
+
+    static SendMessage insufficientBalanceMessage(Long chatId, String language, int balance, int required) {
+        int missing = Math.max(0, required - balance);
+        SendMessage message = new SendMessage(chatId.toString(), localized(language,
+                "❌ Balansingizda mablag' yetarli emas.\n\n💰 Sizda: " + balance + " so'm\n📕 Taqdimot narxi: " + required + " so'm\n➕ Yetishmayapti: " + missing + " so'm\n\nBalansingizni to'ldiring va qayta buyurtma bering.",
+                "❌ Недостаточно средств.\nБаланс: " + balance + " сум\nЦена: " + required + " сум\nНе хватает: " + missing + " сум",
+                "❌ Insufficient balance.\nAvailable: " + balance + " UZS\nPrice: " + required + " UZS\nMissing: " + missing + " UZS"));
+        InlineKeyboardButton button = InlineKeyboardButton.builder()
+                .text(localized(language, "💳 Balansni to'ldirish", "💳 Пополнить баланс", "💳 Top up balance"))
+                .callbackData("SLIDE_TOPUP_" + required).build();
+        message.setReplyMarkup(new InlineKeyboardMarkup(List.of(List.of(button))));
+        return message;
+    }
+
+    static String progressText(String language, long elapsedSeconds, boolean ready, String stage) {
+        int percent = ready ? 100 : (int)Math.min(95, Math.max(0, elapsedSeconds) * 95 / 60);
+        int filled = percent / 10;
+        String bar = "▰".repeat(filled) + "▱".repeat(10 - filled);
+        String timing = ready ? localized(language, "Tayyor! Yuborilmoqda...", "Готово! Отправляем...", "Ready! Sending...")
+                : elapsedSeconds < 60 ? localized(language, "⏱ 1 daqiqalik tayyorlash: " + (60 - elapsedSeconds) + " soniya",
+                    "⏱ Подготовка: " + (60 - elapsedSeconds) + " с", "⏱ Preparation: " + (60 - elapsedSeconds) + " seconds")
+                : localized(language, "⏳ Yakuniy tayyorlash davom etmoqda...", "⏳ Завершаем подготовку...", "⏳ Finishing your presentation...");
+        return "📊 " + bar + " " + percent + "%\n\n" + timing + "\n" + stage;
+    }
+
+    private final class OrderProgress implements AutoCloseable {
+        private final SlideBot bot;
+        private final Long chatId;
+        private final String language;
+        private final Integer messageId;
+        private final Integer waitingId;
+        private final long startedAt = System.nanoTime();
+        private volatile String stage;
+        private boolean closed;
+        private final ScheduledFuture<?> timer;
+
+        private OrderProgress(SlideBot bot, Long chatId, String language, Integer waitingId) {
+            this.bot = bot; this.chatId = chatId; this.language = language; this.waitingId = waitingId;
+            stage = localized(language, "Internetdan mavzuga mos ma'lumotlar qidirilmoqda...",
+                    "Ищем материалы по теме...", "Finding relevant Internet sources...");
+            Message message = send(bot, chatId, progressText(language, 0, false, stage));
+            messageId = message == null ? null : message.getMessageId();
+            timer = progressClock.scheduleAtFixedRate(this::tick, 5, 5, TimeUnit.SECONDS);
+        }
+
+        void stage(String text) { stage = text; }
+
+        private synchronized void tick() {
+            if (!closed) progress(bot, chatId, messageId,
+                    progressText(language, TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startedAt), false, stage));
+        }
+
+        void ready() throws InterruptedException {
+            long remaining = TimeUnit.SECONDS.toNanos(60) - (System.nanoTime() - startedAt);
+            if (remaining > 0) TimeUnit.NANOSECONDS.sleep(remaining);
+            synchronized (this) {
+                timer.cancel(false);
+                if (!closed) progress(bot, chatId, messageId, progressText(language, 60, true, ""));
+            }
+        }
+
+        @Override public synchronized void close() {
+            closed = true; timer.cancel(false);
+            removeProgress(bot, chatId, messageId);
+            removeProgress(bot, chatId, waitingId);
+        }
+    }
+
+    @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
+    public void recoverInterruptedOrders() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
+        for (SlideOrderEntity order : orders.abandoned(cutoff)) {
+            try { orders.expire(order.getId(), cutoff); }
+            catch (Exception e) { System.err.println("Slide refund recovery failed: " + order.getId()); }
+        }
+    }
+
+    private void progress(SlideBot bot, Long chatId, Integer id, String text) {
+        if (id == null) return;
+        try {
+            EditMessageText edit = new EditMessageText();
+            edit.setChatId(chatId.toString()); edit.setMessageId(id); edit.setText(text);
+            bot.execute(edit);
+        } catch (Exception ignored) {}
+    }
+
+    private void removeProgress(SlideBot bot, Long chatId, Integer id) {
+        if (id != null) try { bot.execute(new DeleteMessage(chatId.toString(), id)); } catch (Exception ignored) {}
+    }
+
+    private Message send(SlideBot bot, Long chatId, String text) {
+        try { return bot.execute(new SendMessage(chatId.toString(), text)); }
+        catch (Exception ignored) { return null; }
+    }
+
+    private static String localized(String language, String uz, String ru, String en) {
+        return "RU".equals(language) ? ru : "ENG".equals(language) ? en : uz;
     }
 
     public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
         try {
-            AnswerCallbackQuery a = new AnswerCallbackQuery();
-            a.setCallbackQueryId(query.getId()); a.setText("Qabul qilindi");
-            bot.execute(a);
+            AnswerCallbackQuery answer = new AnswerCallbackQuery();
+            answer.setCallbackQueryId(query.getId());
+            answer.setText("Taqdimot yaratish uchun menyudagi web appni oching.");
+            bot.execute(answer);
         } catch (Exception ignored) {}
     }
 
-    public void handleMessage(UserEntity user, Message message, SlideBot bot) {}
+    public void handleMessage(UserEntity user, Message message, SlideBot bot) {
+        send(bot, message.getChatId(), "Taqdimot sozlamalarini menyudagi web app orqali kiriting.");
+    }
+
+    @PreDestroy public void shutdown() { progressClock.shutdownNow(); workers.shutdown(); }
 }

@@ -23,8 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class BotService {
 
-    private static final String WEB_APP_URL  = "https://ozodbekfakhriddinovich.github.io/AI_Slide_Bot/index.html";
-    private static final String CHANNEL_1    = "@pptx_pdf_mustaqil_ish";
+    @org.springframework.beans.factory.annotation.Value("${slides.web-app-url:https://ozodbekfakhriddinovich.github.io/AI_Slide_Bot/index.html?v=2.0}")
+    private String WEB_APP_URL;
     private static final long   CACHE_TTL_MS = 60_000L;
 
     private final Map<Long, long[]> channelMemberCache = new ConcurrentHashMap<>();
@@ -32,6 +32,7 @@ public class BotService {
     @Autowired private ReferralService       referralService;
     @Autowired private ZipService            zipService;
     @Autowired private UserRepository        userRepository;
+    @Autowired private uz.ai.slideshowbot.repository.ChannelRepository channelRepository;
     @Autowired private PdfService            pdfService;
     @Autowired private BalanceService        balanceService;
     @Autowired private AdminCheckService     adminCheckService;
@@ -44,15 +45,21 @@ public class BotService {
     @Autowired private ReferatService        referatService;
     @Autowired private VideoTutorialService  videoTutorialService;
 
+    // Temporary storage for admin channel flow
+    private final Map<Long, uz.ai.slideshowbot.entity.ChannelEntity> pendingChannels = new ConcurrentHashMap<>();
+
     public boolean handleUpdate(Update update, SlideBot bot) {
         try {
             if (adminCheckService.handleAdminCallback(update, bot)) return true;
 
             if (update.hasCallbackQuery()) {
-                CallbackQuery query       = update.getCallbackQuery();
-                String        data        = query.getData();
-                Message       callbackMsg = (Message) query.getMessage();
-                Long          chatId      = callbackMsg.getChatId();
+                CallbackQuery query = update.getCallbackQuery();
+                String data = query.getData();
+                Long chatId = query.getMessage().getChatId();
+                Message callbackMsg = (Message) query.getMessage();
+
+                // Reset PDF flow if they click any inline button
+                pdfService.resetFlow(chatId);
 
                 UserEntity user = userRepository.findByChatId(chatId).orElse(null);
                 if (user == null) return false;
@@ -197,9 +204,114 @@ public class BotService {
                         case "REFERAT_MENU_BACK", "TEST_MENU_BACK" -> {
                             menuService.sendSimpleMenu(bot, chatId, lang(user));
                         }
+                        case "ADMIN_TOTAL_USERS" -> {
+                            if (chatId.equals(6290351864L)) {
+                                long count = userRepository.count();
+                                try { bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "👥 Jami foydalanuvchilar: " + count + " ta")); } catch (Exception ignored) {}
+                            }
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
+                        case "ADMIN_TOTAL_BALANCE" -> {
+                            if (chatId.equals(6290351864L)) {
+                                Long sum = userRepository.getTotalBalance();
+                                try { bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "💰 Jami summa: " + sum + " so'm")); } catch (Exception ignored) {}
+                            }
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
+                        case "ADMIN_USER_MENU" -> {
+                            if (chatId.equals(6290351864L)) menuService.sendSimpleMenu(bot, chatId, lang(user));
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
+                        case "ADMIN_ADD_CHANNEL" -> {
+                            if (chatId.equals(6290351864L)) {
+                                user.setState(UserState.ADMIN_WAITING_CHANNEL_URL);
+                                userRepository.save(user);
+                                try { bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "➕ Kanal qo'shish\n\nKanal havolasini yuboring (public kanal):\nMasalan: @kanal_nomi yoki https://t.me/kanal_nomi")); } catch (Exception ignored) {}
+                            }
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
+                        case "ADMIN_CHAN_REQ_YES", "ADMIN_CHAN_REQ_NO" -> {
+                            if (chatId.equals(6290351864L) && user.getState() == UserState.ADMIN_WAITING_CHANNEL_MANDATORY) {
+                                uz.ai.slideshowbot.entity.ChannelEntity ce = pendingChannels.remove(chatId);
+                                if (ce != null) {
+                                    ce.setIsRequired(data.equals("ADMIN_CHAN_REQ_YES"));
+                                    channelRepository.save(ce);
+                                    user.setState(UserState.START);
+                                    userRepository.save(user);
+                                    try { bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "✅ Kanal qo'shildi!\n\n🔗 " + ce.getUsername() + "\n🏷 Nom: " + ce.getName() + "\n📌 Majburiy: " + (ce.getIsRequired() ? "Ha" : "Yo'q") + "\n\n⚠️ Eslatma: a'zolikni tekshirish uchun bot shu kanalda admin bo'lishi shart.")); } catch (Exception ignored) {}
+                                    deleteMessage(bot, callbackMsg);
+                                }
+                            }
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
+                        case "ADMIN_CHANNELS" -> {
+                            if (chatId.equals(6290351864L)) {
+                                java.util.List<uz.ai.slideshowbot.entity.ChannelEntity> list = channelRepository.findAll();
+                                org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "📋 Ulangan kanallar (" + list.size() + " ta)\n\nKo'rish uchun tugmani bosing.");
+                                org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup markup = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                                java.util.List<java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows = new java.util.ArrayList<>();
+                                for (uz.ai.slideshowbot.entity.ChannelEntity ch : list) {
+                                    java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r = new java.util.ArrayList<>();
+                                    org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btn1 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
+                                    btn1.setText("📢 " + ch.getName());
+                                    String url = ch.getUsername().startsWith("@") ? "https://t.me/" + ch.getUsername().substring(1) : ch.getUsername();
+                                    btn1.setUrl(url);
+                                    org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btn2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
+                                    btn2.setText("👁 Ko'rish"); btn2.setCallbackData("ADMIN_CHANNELS_VIEW_" + ch.getId());
+                                    r.add(btn1); r.add(btn2);
+                                    rows.add(r);
+                                }
+                                markup.setKeyboard(rows);
+                                msg.setReplyMarkup(markup);
+                                try { bot.execute(msg); } catch (Exception ignored) {}
+                            }
+                            answerCallback(bot, query.getId(), false); return true;
+                        }
                         default -> {
+                            if (data.startsWith("ADMIN_CHANNELS_VIEW_")) {
+                                if (chatId.equals(6290351864L)) {
+                                    try {
+                                        Long id = Long.parseLong(data.replace("ADMIN_CHANNELS_VIEW_", ""));
+                                        uz.ai.slideshowbot.entity.ChannelEntity ch = channelRepository.findById(id).orElse(null);
+                                        if (ch != null) {
+                                            String info = "<code>Kanal    : " + ch.getName() + "\nManzil   : " + ch.getUsername() + "\nMajburiy : " + (ch.getIsRequired() ? "Ha" : "Yo'q") + "\nHolati   : 🟢 Active\nQo'shildi: " + ch.getAddedUsersCount() + " ta user</code>";
+                                            org.telegram.telegrambots.meta.api.methods.send.SendMessage msg2 = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), info);
+                                            msg2.setParseMode("HTML");
+                                            org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup markup2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                                            java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r = new java.util.ArrayList<>();
+                                            org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b1 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b1.setText("✅ Qoldirish"); b1.setCallbackData("ADMIN_CHANNEL_KEEP");
+                                            org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b2.setText("🔌 Botdan uzish"); b2.setCallbackData("ADMIN_CHANNEL_REMOVE_" + id);
+                                            r.add(b1); r.add(b2);
+                                            markup2.setKeyboard(java.util.List.of(r));
+                                            msg2.setReplyMarkup(markup2);
+                                            bot.execute(msg2);
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+                                answerCallback(bot, query.getId(), false); return true;
+                            }
+                            if (data.startsWith("ADMIN_CHANNEL_REMOVE_")) {
+                                if (chatId.equals(6290351864L)) {
+                                    try {
+                                        Long id = Long.parseLong(data.replace("ADMIN_CHANNEL_REMOVE_", ""));
+                                        channelRepository.deleteById(id);
+                                        deleteMessage(bot, callbackMsg);
+                                        bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "✅ Kanal botdan uzildi va o'chirildi."));
+                                    } catch (Exception ignored) {}
+                                }
+                                answerCallback(bot, query.getId(), false); return true;
+                            }
+                            if (data.equals("ADMIN_CHANNEL_KEEP")) {
+                                deleteMessage(bot, callbackMsg);
+                                answerCallback(bot, query.getId(), false); return true;
+                            }
                             // PAY_AUTO_6000 yoki PAY_BANK_6000 formatidagi callbacklar
-                            if (data.startsWith("PAY_AUTO_")) {
+                            if (data.equals("SLIDE_TOPUP_5000") || data.equals("SLIDE_TOPUP_7000")) {
+                                int amount = Integer.parseInt(data.substring("SLIDE_TOPUP_".length()));
+                                balanceService.handleAutoPayment(bot, user, chatId, amount, callbackMsg.getMessageId());
+                                answerCallback(bot, query.getId(), false);
+                                return true;
+                            } else if (data.startsWith("PAY_AUTO_")) {
                                 try {
                                     int baseAmount = Integer.parseInt(data.replace("PAY_AUTO_", ""));
                                     balanceService.handleAutoPayment(bot, user, chatId, baseAmount, callbackMsg.getMessageId());
@@ -241,13 +353,20 @@ public class BotService {
                 if (changed) userRepository.save(user);
             }
 
-            if (message.getFrom() != null && "slides_admin1".equals(message.getFrom().getUserName())) {
+            if (message.getWebAppData() == null && (chatId.equals(8429918073L) || (message.getFrom() != null && "slides_admin1".equals(message.getFrom().getUserName())))) {
                 broadcastService.broadcastToAll(bot, message);
-                bot.execute(new SendMessage(chatId.toString(), "✅ Xabar barcha foydalanuvchilarga yuborildi."));
                 return true;
             }
 
             if (message.getWebAppData() != null) {
+                if (user.getLanguage() == null || user.getLanguage().isBlank()) {
+                    menuService.sendLanguageSelector(bot, chatId);
+                    return true;
+                }
+                if (!isUserInChannel(bot, chatId)) {
+                    sendJoinRequest(bot, chatId, user.getLanguage());
+                    return true;
+                }
                 slideFlowSingleService.handleWebAppData(user, message, bot);
                 return true;
             }
@@ -274,6 +393,42 @@ public class BotService {
 
             boolean isStart   = text.equals("/start") || text.startsWith("/start ");
             boolean isLangSel = text.equals("🇺🇿 O'zbekcha") || text.equals("🇷🇺 Русский") || text.equals("🇺🇸 English");
+
+            if (text.equals("/admin") && chatId.equals(6290351864L)) {
+                user.setState(UserState.START);
+                userRepository.save(user);
+                org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage();
+                msg.setChatId(chatId.toString());
+                msg.setText("🛠 Admin panel\n\nKerakli bo'limni tanlang.\n\n/user — oddiy menyuga qaytish");
+
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup markup = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                java.util.List<java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows = new java.util.ArrayList<>();
+
+                java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r1 = new java.util.ArrayList<>();
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b1 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b1.setText("💰 Jami summa"); b1.setCallbackData("ADMIN_TOTAL_BALANCE");
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b2.setText("👥 Jami userlar"); b2.setCallbackData("ADMIN_TOTAL_USERS");
+                r1.add(b1); r1.add(b2);
+
+                java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r2 = new java.util.ArrayList<>();
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b3 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b3.setText("📋 Kanallar"); b3.setCallbackData("ADMIN_CHANNELS");
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b4 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b4.setText("👤 User menyu"); b4.setCallbackData("ADMIN_USER_MENU");
+                r2.add(b3); r2.add(b4);
+
+                java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r3 = new java.util.ArrayList<>();
+                org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton b5 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); b5.setText("➕ Kanal qo'shish"); b5.setCallbackData("ADMIN_ADD_CHANNEL");
+                r3.add(b5);
+
+                rows.add(r1); rows.add(r2); rows.add(r3);
+                markup.setKeyboard(rows);
+                msg.setReplyMarkup(markup);
+
+                try { bot.execute(msg); } catch (Exception ignored) {}
+                return true;
+            }
+            if (text.equals("/user") && chatId.equals(6290351864L)) {
+                menuService.sendSimpleMenu(bot, chatId, lang(user));
+                return true;
+            }
 
             if (isStart) {
                 user.setInCheckFlow(false); user.setInZipFlow(false); user.setInTestFlow(false);
@@ -330,6 +485,16 @@ public class BotService {
                 return true;
             }
 
+            if (message.hasText() && isCommandOrMenu(text)) {
+                user.setInZipFlow(false); user.setInCheckFlow(false);
+                testService.resetTestFlow(user);
+                wordPdfService.resetFlow(user);
+                referatService.resetFlow(user);
+                pdfService.resetFlow(chatId);
+                user.setState(UserState.START);
+                userRepository.save(user);
+            }
+
             if (Boolean.TRUE.equals(user.getInReferatFlow())) {
                 if (message.hasText()) {
                     if (user.getState() == UserState.WAITING_REFERAT_TOPIC) {
@@ -354,6 +519,41 @@ public class BotService {
             }
 
             if (message.hasText()) {
+
+                if (chatId == 6290351864L && (text.matches("^\\d+\\+\\d+$") || text.matches("^\\d+\\-\\d+$"))) {
+                    try {
+                        boolean isAdd = text.contains("+");
+                        String[] parts = text.split(isAdd ? "\\+" : "\\-");
+                        Long targetChatId = Long.parseLong(parts[0]);
+                        int amount = Integer.parseInt(parts[1]);
+
+                        UserEntity targetUser = userRepository.findByChatId(targetChatId).orElse(null);
+                        if (targetUser != null) {
+                            if (isAdd) {
+                                targetUser.setBalance(targetUser.getBalance() + amount);
+                                userRepository.save(targetUser);
+                                org.telegram.telegrambots.meta.api.methods.send.SendMessage userMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(targetChatId.toString(), "Sizga " + amount + " so'm tushdi, balansingiz " + targetUser.getBalance() + " so'm bo'ldi.");
+                                bot.execute(userMsg);
+                                org.telegram.telegrambots.meta.api.methods.send.SendMessage adminMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "Muvaffaqiyatli qo'shildi! Yangi balans: " + targetUser.getBalance());
+                                bot.execute(adminMsg);
+                            } else {
+                                targetUser.setBalance(targetUser.getBalance() - amount);
+                                userRepository.save(targetUser);
+                                org.telegram.telegrambots.meta.api.methods.send.SendMessage userMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(targetChatId.toString(), "Sizning balansingizdan " + amount + " so'm ayrildi, balansingizda " + targetUser.getBalance() + " so'm qoldi.");
+                                bot.execute(userMsg);
+                                org.telegram.telegrambots.meta.api.methods.send.SendMessage adminMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "Muvaffaqiyatli ayirildi! Yangi balans: " + targetUser.getBalance());
+                                bot.execute(adminMsg);
+                            }
+                        } else {
+                            org.telegram.telegrambots.meta.api.methods.send.SendMessage adminMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "Bunday foydalanuvchi topilmadi!");
+                            bot.execute(adminMsg);
+                        }
+                    } catch (Exception e) {
+                        org.telegram.telegrambots.meta.api.methods.send.SendMessage adminMsg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "Xatolik: " + e.getMessage());
+                        try { bot.execute(adminMsg); } catch(Exception ex){}
+                    }
+                    return true;
+                }
 
                 String buttonKey = videoTutorialService.resolveButtonKey(text);
                 if (buttonKey != null) {
@@ -523,11 +723,53 @@ public class BotService {
                 return true;
             }
 
+            if (user.getState() == UserState.ADMIN_WAITING_CHANNEL_URL) {
+                if (message.hasText() && !text.startsWith("/")) {
+                    uz.ai.slideshowbot.entity.ChannelEntity ce = new uz.ai.slideshowbot.entity.ChannelEntity();
+                    ce.setUsername(text.trim());
+                    pendingChannels.put(chatId, ce);
+                    user.setState(UserState.ADMIN_WAITING_CHANNEL_NAME);
+                    userRepository.save(user);
+                    try { bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "✍️ Endi tugma uchun nom yozing (foydalanuvchilar obuna menyusida ko'radi):")); } catch (Exception ignored) {}
+                }
+                return true;
+            }
+            if (user.getState() == UserState.ADMIN_WAITING_CHANNEL_NAME) {
+                if (message.hasText() && !text.startsWith("/")) {
+                    uz.ai.slideshowbot.entity.ChannelEntity ce = pendingChannels.get(chatId);
+                    if (ce != null) {
+                        ce.setName(text.trim());
+                        user.setState(UserState.ADMIN_WAITING_CHANNEL_MANDATORY);
+                        userRepository.save(user);
+                        org.telegram.telegrambots.meta.api.methods.send.SendMessage m = new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "📌 Bu kanalga ulanish majburiy bo'lsinmi?\n\nHa — foydalanuvchilar shu kanalga a'zo bo'lmaguncha botdan foydalana olmaydi.");
+                        org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup mk = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                        java.util.List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r = new java.util.ArrayList<>();
+                        org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btnYes = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); btnYes.setText("✅ Ha"); btnYes.setCallbackData("ADMIN_CHAN_REQ_YES");
+                        org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btnNo = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(); btnNo.setText("❌ Yo'q"); btnNo.setCallbackData("ADMIN_CHAN_REQ_NO");
+                        r.add(btnYes); r.add(btnNo);
+                        mk.setKeyboard(java.util.List.of(r));
+                        m.setReplyMarkup(mk);
+                        try { bot.execute(m); } catch (Exception ignored) {}
+                    }
+                }
+                return true;
+            }
+
             if (user.getState() == UserState.WAITING_TOPIC || user.getState() == UserState.WAITING_INFO) {
                 slideFlowSingleService.handleMessage(user, message, bot); return true;
             }
 
             try { if (pdfService.handlePdfFlow(update, bot, user)) return true; } catch (Exception ignored) {}
+
+            if (message.hasPhoto() || message.hasDocument()) {
+                String lang = lang(user);
+                sendMessage(bot, chatId, switch (lang) {
+                    case "RU"  -> "⚠️ Уважаемый пользователь, если это чек об оплате, пожалуйста, сначала нажмите кнопку «📝 Отправить чек» или отправьте команду /chek!";
+                    case "ENG" -> "⚠️ Dear user, if this is a payment receipt, please first click the «📝 Send receipt» button or send the /chek command!";
+                    default    -> "⚠️ Hurmatli foydalanuvchi, agar bu to'lov cheki bo'lsa, iltimos avval «📝 Chekni yuborish» tugmasini bosing yoki /chek buyrug'ini yuboring!";
+                }, null, false);
+                return true;
+            }
 
             if (user.getState() == UserState.START || user.getState() == null) {
                 String lang = lang(user);
@@ -555,7 +797,16 @@ public class BotService {
     }
 
     public boolean refreshCacheAndCheck(SlideBot bot, Long userId) {
-        boolean m = checkSingleChannel(bot, userId, CHANNEL_1);
+        java.util.List<uz.ai.slideshowbot.entity.ChannelEntity> mandatoryChannels = channelRepository.findAllByIsRequiredTrue();
+        if (mandatoryChannels.isEmpty()) return true;
+
+        boolean m = true;
+        for (uz.ai.slideshowbot.entity.ChannelEntity ch : mandatoryChannels) {
+            if (!checkSingleChannel(bot, userId, ch.getUsername())) {
+                m = false;
+                break;
+            }
+        }
         channelMemberCache.put(userId, new long[]{System.currentTimeMillis(), m ? 1L : 0L});
         return m;
     }
@@ -564,15 +815,21 @@ public class BotService {
 
     public void forceRejoinIfNeeded(SlideBot bot, UserEntity user, Long chatId) {
         if (user.getLanguage() == null) return;
-        boolean in1 = checkSingleChannel(bot, chatId, CHANNEL_1);
-        if (in1) {
+        boolean inAll = refreshCacheAndCheck(bot, chatId);
+        if (inAll) {
             if (user.getLastWarningTime() != null) { user.setLastWarningTime(null); userRepository.save(user); }
         }
     }
 
     private boolean checkSingleChannel(SlideBot bot, Long userId, String channelUsername) {
         try {
-            ChatMember member = bot.execute(new GetChatMember(channelUsername, userId));
+            String target = channelUsername;
+            if (target.startsWith("https://t.me/")) {
+                target = "@" + target.substring("https://t.me/".length());
+            } else if (!target.startsWith("@")) {
+                target = "@" + target;
+            }
+            ChatMember member = bot.execute(new GetChatMember(target, userId));
             if (member == null || member.getStatus() == null) return false;
             String s = member.getStatus();
             return s.equals("member") || s.equals("administrator") || s.equals("creator");
@@ -600,11 +857,32 @@ public class BotService {
 
     private void sendJoinRequest(SlideBot bot, Long chatId, String lang) {
         String l = lang != null ? lang : "UZ";
-        rawSender.sendJoinRequestWithOneButton(bot, chatId.toString(),
-                switch (l) { case "RU" -> "📢 Для использования бота подпишитесь на наш канал!"; case "ENG" -> "📢 Subscribe to our channel to use the bot!"; default -> "📢 Botdan foydalanish uchun kanalga a'zo bo'ling!"; },
-                switch (l) { case "RU" -> "📢 Презентация и PDF"; case "ENG" -> "📢 Presentation & PDF"; default -> "📢 Taqdimot & PDF"; }, "https://t.me/pptx_pdf_mustaqil_ish",
-                switch (l) { case "RU" -> "✅ Подтверждение"; case "ENG" -> "✅ Check subscription"; default -> "✅ A'zolikni tekshirish"; },
-                "CHECK_JOIN");
+        String msgText = switch (l) { case "RU" -> "📢 Для использования бота подпишитесь на наши каналы!"; case "ENG" -> "📢 Subscribe to our channels to use the bot!"; default -> "📢 Botdan foydalanish uchun kanallarga a'zo bo'ling!"; };
+
+        java.util.List<uz.ai.slideshowbot.entity.ChannelEntity> channels = channelRepository.findAllByIsRequiredTrue();
+        if (channels.isEmpty()) return;
+
+        SendMessage msg = new SendMessage(chatId.toString(), msgText);
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        java.util.List<java.util.List<InlineKeyboardButton>> rows = new java.util.ArrayList<>();
+
+        for (uz.ai.slideshowbot.entity.ChannelEntity ch : channels) {
+            InlineKeyboardButton btn = new InlineKeyboardButton();
+            btn.setText("📢 " + ch.getName());
+            String url = ch.getUsername();
+            if (url.startsWith("@")) url = "https://t.me/" + url.substring(1);
+            btn.setUrl(url);
+            rows.add(java.util.List.of(btn));
+        }
+
+        InlineKeyboardButton checkBtn = new InlineKeyboardButton();
+        checkBtn.setText(switch (l) { case "RU" -> "✅ Подтверждение"; case "ENG" -> "✅ Check subscription"; default -> "✅ A'zolikni tekshirish"; });
+        checkBtn.setCallbackData("CHECK_JOIN");
+        rows.add(java.util.List.of(checkBtn));
+
+        markup.setKeyboard(rows);
+        msg.setReplyMarkup(markup);
+        try { bot.execute(msg); } catch (Exception ignored) {}
     }
 
     private Message sendMessage(SlideBot bot, Long chatId, String text, ReplyKeyboard keyboard, boolean isLangMsg) {
@@ -634,4 +912,22 @@ public class BotService {
     }
 
     private String lang(UserEntity user) { return user.getLanguage() != null ? user.getLanguage() : "UZ"; }
+
+    private boolean isCommandOrMenu(String text) {
+        if (text == null) return false;
+        if (text.startsWith("/start") || text.equals("/balance") || text.equals("/check") || text.equals("/chek") || text.equals("/buy") || text.equals("/referal")) return true;
+
+        return text.equals("🎞️ Taqdimot yaratish") || text.equals("🎞️ Создать презентацию") || text.equals("🎞️ Create Presentation")
+            || text.equals("💰 Balans") || text.equals("💰 Баланс") || text.equals("💰 Balance")
+            || text.equals("Referral") || text.equals("Реферал")
+            || text.equals("🌐 Til Sozlamalari") || text.equals("🌐 Язык") || text.equals("🌐 Language Settings")
+            || text.equals("📦 Fayllarni Zip qilish") || text.equals("📦 Zip Files") || text.equals("📦 Архивировать файлы (Zip)")
+            || text.equals("📋 Test tayyorlash") || text.equals("📋 Создать тест") || text.equals("📋 Create Test")
+            || text.equals("📄 Word <--> PDF")
+            || text.equals("📝 Referat tayyorlash") || text.equals("📝 Создать реферат") || text.equals("📝 Create Essay")
+            || text.equals("🖥️ Boshqa Xizmatlar") || text.equals("🖥️ Другие услуги") || text.equals("🖥️ Other Services")
+            || text.equals("📄 PDF yaratish") || text.equals("📄 Создать PDF") || text.equals("📄 Create PDF")
+            || text.equals("🇺🇿 O'zbekcha") || text.equals("🇷🇺 Русский") || text.equals("🇺🇸 English")
+            || uz.ai.slideshowbot.service.BalanceService.parseAmountFromButton(text) != null;
+    }
 }

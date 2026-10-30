@@ -44,15 +44,16 @@
     input::placeholder,textarea::placeholder { color:#637b98; }
     input:focus,textarea:focus,select:focus { outline:none; border-color:var(--cyan); }
     select { appearance:none; padding-right:35px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%2394a8c3' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; }
-    .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-    .field-grid>*,.workspace>*,.auto-text,.plan-text { min-width:0; }
+    .workspace>*,.auto-text,.plan-text { min-width:0; }
     input,select,textarea { min-width:0; max-width:100%; }
     .hint { margin:6px 0 0; color:var(--muted); font-size:11px; }
     .error { color:var(--red); font-size:12px; margin:7px 0 0; }
     [aria-invalid=true] { border-color:var(--red) !important; }
-    .count-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; }
+    .count-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
     .count-button { border:1px solid #2b3a52; border-radius:9px; background:#0b1524; color:var(--muted); padding:9px 2px; font-weight:600; }
     .count-button[aria-pressed=true] { background:#173743; color:#8de9f6; border-color:#55bbcd; }
+    .count-button strong { display:block; color:inherit; font-size:18px; }
+    .count-button small { display:block; color:var(--muted); font-size:10px; font-weight:400; margin-top:2px; }
     .theme-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px; }
     .theme-head .panel-head { margin:0; }
     .badge { font-size:10px; font-weight:650; color:#a0b7d2; background:#1b2b42; border:1px solid #30445d; padding:3px 8px; border-radius:6px; white-space:nowrap; }
@@ -74,24 +75,11 @@
     .theme-card[aria-pressed=true] { border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan); }
     .theme-card .selection-mark { position:absolute; right:7px; top:7px; width:15px; height:15px; font-size:9px; background:#091728a6; }
     .theme-card[aria-pressed=true] .selection-mark { background:var(--cyan); border-color:var(--cyan); color:#082332; }
-    .mini-slide { display:block; aspect-ratio:16/9; position:relative; overflow:hidden; padding:14px 11px 9px; background:var(--theme-bg); color:var(--theme-fg); }
-    .mini-kicker { display:block; width:36%; height:2px; margin:0 0 9px; background:var(--theme-accent); opacity:.9; }
-    .mini-title { display:block; width:65%; height:4px; margin-bottom:5px; border-radius:1px; background:currentColor; opacity:.85; }
-    .mini-title.short { width:46%; }
-    .mini-line { display:block; width:50%; height:2px; background:currentColor; opacity:.3; margin-top:6px; }
-    .mini-orbit { position:absolute; border:1px solid var(--theme-accent); border-radius:50%; width:65px; height:65px; right:-23px; bottom:-19px; opacity:.6; }
-    .mini-orbit:before { content:""; position:absolute; inset:9px; border:1px solid var(--theme-accent); border-radius:50%; }
+    .mini-slide { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--theme-bg); }
     .theme-caption { display:flex; gap:4px; align-items:center; justify-content:space-between; padding:8px; font-size:10px; font-weight:600; }
     .theme-index { color:#6c829e; font-size:9px; }
     .empty { margin:12px 0; color:var(--muted); font-size:12px; }
     .preview-note { font-size:10px; color:#7e96b4; margin:13px 0 0; }
-    .format-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .format-button { border:1px solid #2b3c54; background:#0c1727; color:var(--muted); border-radius:11px; display:flex; gap:10px; align-items:center; text-align:left; padding:13px; }
-    .format-button[aria-pressed=true] { background:#15313c; color:var(--text); border-color:#52b9cb; }
-    .format-symbol { width:31px; height:36px; display:grid; place-items:center; border:1px solid currentColor; border-radius:5px; color:#7ddfe9; font-size:9px; font-weight:700; }
-    .format-button strong,.format-button small { display:block; }
-    .format-button strong { font-size:12px; }
-    .format-button small { font-size:10px; font-weight:400; margin-top:2px; color:var(--muted); }
     .plan-options { display:grid; gap:9px; }
     .plan-button { display:flex; align-items:center; gap:11px; width:100%; border:1px solid #2b3c54; border-radius:11px; background:#0c1727; color:var(--text); padding:13px; text-align:left; }
     .plan-button[aria-pressed=true] { border-color:#52b9cb; background:#15313c; }
@@ -102,13 +90,8 @@
     .preview-column { position:sticky; top:22px; }
     .preview-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
     .live-dot { width:5px; height:5px; background:var(--cyan); border-radius:50%; display:inline-block; margin-right:5px; }
-    .deck-preview { aspect-ratio:16/10; background:var(--theme-bg); color:var(--theme-fg); border:1px solid #3a5068; border-radius:13px; padding:25px; position:relative; overflow:hidden; box-shadow:0 18px 50px #0004; transition:background .2s,color .2s; }
-    .deck-preview:before { content:""; position:absolute; width:180px; height:180px; border:1px solid var(--theme-accent); border-radius:50%; right:-90px; top:10px; opacity:.5; box-shadow:0 0 0 24px var(--theme-bg),0 0 0 25px var(--theme-accent); }
-    .deck-preview:after { content:""; position:absolute; right:24px; bottom:20px; width:76px; height:47px; background-image:radial-gradient(circle,var(--theme-accent) 1px,transparent 1.5px); background-size:9px 9px; opacity:.5; }
-    .deck-kicker { display:block; font-size:7px; font-weight:700; text-transform:uppercase; color:var(--theme-accent); letter-spacing:1.6px; margin-bottom:17px; position:relative; }
-    .deck-topic { font-size:clamp(18px,2.2vw,24px); line-height:1.25; max-width:85%; letter-spacing:-.7px; margin:0; position:relative; overflow-wrap:anywhere; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; }
-    .deck-rule { display:block; width:32px; height:3px; background:var(--theme-accent); margin-top:17px; }
-    .deck-author { display:block; font-size:8px; margin-top:12px; opacity:.7; max-width:75%; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; position:relative; }
+    .deck-preview { aspect-ratio:16/9; background:var(--theme-bg); border:1px solid #3a5068; border-radius:13px; overflow:hidden; box-shadow:0 18px 50px #0004; }
+    .deck-preview img { display:block; width:100%; height:100%; object-fit:cover; }
     .preview-theme-name { margin:12px 0 3px; font-size:12px; font-weight:600; }
     .preview-disclaimer { margin:0 0 22px; font-size:10px; color:var(--muted); }
     .order-box { padding:20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); }
@@ -129,8 +112,8 @@
     .notice.error-notice { border-color:#743f53; background:#2c1b2b; color:#ffc0ca; }
     .notice.success { border-color:#2e766d; background:#11352f; color:#abedda; }
     .footer { margin:21px 0 0; text-align:center; color:#6f85a0; font-size:10px; }
-    @media(max-width:760px) { .shell { padding:0 16px; max-width:620px; } .topbar { height:64px; } .hero { padding:26px 0 23px; } .hero-art { right:-45px; opacity:.17; } .hero p:last-child { max-width:360px; font-size:12px; } .workspace { grid-template-columns:minmax(0,1fr); gap:0; } .preview-column { position:static; } .preview-visual { display:none; } .panel { padding:19px; margin-bottom:14px; } .theme-grid { gap:10px; } .order-box { margin-top:0; } .top-meta { font-size:10px; } }
-    @media(max-width:380px) { .shell { padding:0 12px; } .panel { padding:16px; } .theme-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .field-grid { gap:10px; } .format-button { padding:10px; gap:7px; } .count-options { gap:5px; } }
+    @media(max-width:760px) { .shell { padding:0 16px; max-width:620px; } .topbar { height:64px; } .hero { padding:26px 0 23px; } .hero-art { right:-45px; opacity:.17; } .hero p:last-child { max-width:360px; font-size:12px; } .workspace { grid-template-columns:minmax(0,1fr); gap:0; } .preview-column { position:static; } .preview-visual { display:none; } .panel { padding:19px; margin-bottom:14px; } .theme-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .order-box { margin-top:0; } .top-meta { font-size:10px; } }
+    @media(max-width:380px) { .shell { padding:0 12px; } .panel { padding:16px; } .count-options { gap:5px; } }
     @media(prefers-reduced-motion:reduce) { *,*:before,*:after { transition:none !important; scroll-behavior:auto !important; } }
   </style>
 </head>
@@ -159,11 +142,9 @@
               <p class="hint" id="topicHint">Fan nomi va asosiy yo‘nalishni qo‘shsangiz, mazmun aniqroq bo‘ladi.</p>
               <p class="error" id="topicError" hidden>Mavzuni kiriting.</p>
             </div>
-            <div class="field-grid">
-              <div class="field"><label for="name">Ism, familiya <span class="optional">ixtiyoriy</span></label><input type="text" id="name" maxlength="80" autocomplete="name" placeholder="Ismingiz"><p class="hint">Muqova sahifasi uchun.</p></div>
-              <div class="field"><label for="language">Taqdimot tili</label><select id="language"><option value="UZ">O‘zbekcha</option><option value="ENG">English</option><option value="RU">Русский</option><option value="ES">Español</option><option value="DE">Deutsch</option><option value="TOJ">Тоҷикӣ</option><option value="TUR">Türkçe</option></select></div>
-            </div>
-            <div class="field"><span class="label" id="countLabel">Slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel"></div><p class="hint">Muqova, reja va yakun sahifalari ham shu songa kiradi.</p></div>
+            <div class="field"><label for="name">Ism, familiya <span aria-hidden="true">*</span></label><input type="text" id="name" minlength="3" maxlength="80" autocomplete="name" placeholder="Ism va familiyangizni kiriting" required aria-describedby="nameHint nameError"><p class="hint" id="nameHint">Muqova sahifasida ko‘rsatiladi.</p><p class="error" id="nameError" hidden>Ism va familiyangizni to‘liq kiriting.</p></div>
+            <div class="field"><label for="language">Taqdimot tili <span aria-hidden="true">*</span></label><select id="language" required aria-describedby="languageError"><option value="" disabled selected>Tilni tanlang…</option><option value="UZ">O‘zbekcha</option><option value="ENG">English</option><option value="RU">Русский</option><option value="ES">Español</option><option value="DE">Deutsch</option><option value="TOJ">Тоҷикӣ</option><option value="TUR">Türkçe</option></select><p class="error" id="languageError" hidden>Taqdimot tilini tanlang.</p></div>
+            <div class="field"><span class="label" id="countLabel">Asosiy slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel"></div><p class="hint">Tanlangan songa muqova, reja va yakun sahifasi bonus sifatida qo‘shiladi. Masalan: 10 + 3 = jami 13 slayd.</p></div>
           </section>
           <section class="panel" aria-labelledby="designTitle">
             <div class="theme-head"><div class="panel-head"><span class="step" aria-hidden="true">02</span><h2 id="designTitle">Dizayn uslubi</h2></div><span class="badge">24 uslub</span></div>
@@ -172,35 +153,29 @@
             <div class="filters" id="themeFilters" role="group" aria-label="Uslub yo‘nalishi"></div>
             <div class="theme-grid" id="themeGrid" role="group" aria-label="Taqdimot uslublari"></div>
             <p id="emptyThemes" class="empty" role="status" hidden>Bu qidiruvga mos uslub topilmadi. Boshqa so‘z yozib ko‘ring.</p>
-            <p class="preview-note">Kartalar rang va uslub namunasidir. Yakuniy sahifalar mavzu, matn va rasmlarga mos joylashtiriladi.</p>
+            <p class="preview-note">Kartalarda taqdimotning haqiqiy birinchi sahifa namunasi ko‘rsatilgan. Mavzu va ism siz kiritgan ma’lumotlarga almashtiriladi.</p>
           </section>
           <section class="panel" aria-labelledby="planTitle">
             <div class="panel-head"><span class="step" aria-hidden="true">03</span><h2 id="planTitle">Tadqiqot hajmi</h2></div>
             <div class="plan-options" id="planOptions" role="group" aria-label="Taqdimot tarifi"></div>
             <p class="hint">Barcha tariflarda internet manbalari va mavzuga mos rasmlar ishlatiladi.</p>
           </section>
-          <section class="panel" aria-labelledby="formatTitle">
-            <div class="panel-head"><span class="step" aria-hidden="true">04</span><h2 id="formatTitle">Fayl formati</h2></div>
-            <div class="format-options" id="formatOptions" role="group" aria-label="Fayl formati">
-              <button type="button" class="format-button" data-format="pptx" aria-pressed="true"><span class="format-symbol" aria-hidden="true">PPT</span><span><strong>PowerPoint</strong><small>.pptx · tahrirlash uchun</small></span></button>
-              <button type="button" class="format-button" data-format="pdf" aria-pressed="false"><span class="format-symbol" aria-hidden="true">PDF</span><span><strong>PDF hujjat</strong><small>.pdf · o‘qish uchun</small></span></button>
-            </div>
-          </section>
         </div>
         <aside class="preview-column" aria-label="Buyurtma tafsilotlari">
           <div class="preview-visual">
-            <div class="preview-label"><span><span class="live-dot"></span>Uslub namunasi</span><span>16 : 9</span></div>
-            <div class="deck-preview" id="deckPreview"><span class="deck-kicker">SlideBot / Presentation</span><h3 class="deck-topic" id="previewTopic">Sizning keyingi<br>taqdimotingiz</h3><span class="deck-rule"></span><span class="deck-author" id="previewAuthor">Muallif ismi</span></div>
-            <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer">Muqova ko‘rinishi uchun uslub namunasi.</p>
+            <div class="preview-label"><span><span class="live-dot"></span>Birinchi sahifa</span><span>16 : 9</span></div>
+            <div class="deck-preview" id="deckPreview"><img id="deckPreviewImage" src="theme-previews/1.jpg" alt="Cyber Navy — birinchi slayd namunasi" width="960" height="540"></div>
+            <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer">Mavzu va muallif ismi namunada ko‘rsatilgan.</p>
           </div>
           <div class="order-box">
             <p class="order-title">Taqdimotingiz</p>
-            <div class="summary-line"><span>Hajmi va tili</span><span id="summaryDetails">10 slayd · O‘zbekcha</span></div>
+            <div class="summary-line"><span>Asosiy slaydlar</span><span id="summaryDetails">10 + 3 bonus = 13 slayd</span></div>
+            <div class="summary-line"><span>Taqdimot tili</span><span id="summaryLanguage">Tanlanmagan</span></div>
             <div class="summary-line"><span>Uslub</span><span id="summaryTheme">Mavzuga mos</span></div>
-            <div class="summary-line"><span>Tadqiqot</span><span id="summaryPlan">Standart</span></div>
+            <div class="summary-line"><span>Tadqiqot</span><span id="summaryPlan">Batafsil</span></div>
             <div class="summary-line"><span>Natija</span><span id="summaryFormat">PowerPoint (.pptx)</span></div>
             <ul class="features"><li>Internet manbalari asosidagi mazmun</li><li>Mavzuga mos haqiqiy rasmlar</li><li>Manbalar va havolalar bilan</li></ul>
-            <div class="total"><span>Jami narx</span><strong><span id="totalPrice" style="font:inherit;color:inherit">3 000</span> <small>so‘m</small></strong></div>
+            <div class="total"><span>Jami narx</span><strong><span id="totalPrice" style="font:inherit;color:inherit">5 000</span> <small>so‘m</small></strong></div>
             <button class="submit" id="submitBtn" type="submit"><span id="submitLabel">Taqdimot yaratish</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <p class="delivery-note" id="deliveryNote">Narx bot balansingizdan yechiladi.<br>Tayyor fayl Telegram chatga yuboriladi.</p>
           </div>
@@ -211,7 +186,7 @@
   </div>
   <script>
     'use strict';
-    // IDs are shared with the backend theme catalog. These cards show palettes, not final slide screenshots.
+    // Stable theme IDs and first-page images are shared with the backend slide renderer.
     const themes = [
       {id:'1',name:'Cyber Navy',group:'tech',tags:'kiber tarmoq xavfsizlik texnologiya',bg:'#0b1425',accent:'#36d5f3',fg:'#f2f7ff'},
       {id:'2',name:'Ocean',group:'nature',tags:'okean dengiz suv geografiya',bg:'#062c46',accent:'#38bdf8',fg:'#edfaff'},
@@ -240,18 +215,15 @@
     ];
     const filters = [{id:'all',name:'Barchasi'},{id:'tech',name:'Texnologiya'},{id:'education',name:'Ta’lim'},{id:'business',name:'Biznes'},{id:'science',name:'Ilm-fan'},{id:'nature',name:'Tabiat'},{id:'creative',name:'Ijod'},{id:'minimal',name:'Minimal'}];
     const languages = {UZ:'O‘zbekcha',ENG:'English',RU:'Русский',ES:'Español',DE:'Deutsch',TOJ:'Тоҷикӣ',TUR:'Türkçe'};
-    const counts = [5,10,15,20,25,30];
-    const plans = {3000:{name:'Standart',detail:'Asosiy manbalar va mavzuning muhim jihatlari'},5000:{name:'Batafsil',detail:'Kengroq manbalar va batafsilroq izlanish'},7000:{name:'Keng tadqiqot',detail:'Manba qidiruviga ko‘proq vaqt va kengroq qamrov'}};
-    const DRAFT_KEY = 'slidebot.presentation.v2';
+    const counts = [10,15,20];
+    const plans = {5000:{name:'Batafsil',detail:'Internet manbalari va mavzuning muhim jihatlari'},7000:{name:'Keng tadqiqot',detail:'Manba qidiruviga ko‘proq vaqt va kengroq qamrov'}};
+    const DRAFT_KEY = 'slidebot.presentation.v3';
     const $ = id => document.getElementById(id);
-    const state = {template:'auto',slideCount:10,tariff:'3000',format:'pptx',filter:'all',pending:false,requestId:null,requestFingerprint:null};
+    const state = {template:'auto',slideCount:10,tariff:'5000',filter:'all',pending:false,requestId:null,requestFingerprint:null};
     let tg = null;
     try { tg = window.Telegram && window.Telegram.WebApp; if(tg) { tg.ready(); tg.expand(); if(tg.setHeaderColor) tg.setHeaderColor('#080f1d'); if(tg.setBackgroundColor) tg.setBackgroundColor('#080f1d'); } } catch(error) { tg = null; }
     // Keyboard-button Mini Apps can have empty initData; the Telegram platform still identifies the WebView.
     const canSend = Boolean(tg && typeof tg.sendData === 'function' && (tg.initData || (tg.platform && tg.platform !== 'unknown')));
-    const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-    const telegramName = tgUser ? [tgUser.first_name,tgUser.last_name].filter(Boolean).join(' ') : '';
-    if(telegramName) $('name').value = telegramName.slice(0,80);
     $('previewNotice').hidden = canSend;
     if(!canSend) { $('submitLabel').textContent = 'Telegram orqali yarating'; $('deliveryNote').textContent = 'Bu sahifa hozir ko‘rib chiqish rejimida.'; }
 
@@ -282,43 +254,40 @@
     function renderThemes() {
       const query = normalized($('themeSearch').value.trim());
       const visible = themes.filter(theme => (state.filter === 'all' || theme.group === state.filter) && normalized(theme.name+' '+theme.tags).includes(query));
-      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+theme.name+' uslubini tanlash" aria-pressed="'+(state.template === theme.id)+'"><span class="mini-slide" style="'+palette(theme)+'" aria-hidden="true"><span class="mini-kicker"></span><span class="mini-title"></span><span class="mini-title short"></span><span class="mini-line"></span><span class="mini-orbit"></span></span><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+theme.name+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
+      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+theme.name+' uslubini tanlash" aria-pressed="'+(state.template === theme.id)+'"><img class="mini-slide" src="theme-previews/'+theme.id+'.jpg" style="'+palette(theme)+'" alt="'+theme.name+' — haqiqiy birinchi slayd namunasi" width="960" height="540" loading="lazy" decoding="async"><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+theme.name+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
       $('emptyThemes').hidden = visible.length > 0;
     }
     function updatePreview() {
       const theme = selectedTheme();
       $('deckPreview').setAttribute('style',palette(theme));
-      $('previewTopic').textContent = $('topic').value.trim() || 'Sizning keyingi taqdimotingiz';
-      $('previewAuthor').textContent = $('name').value.trim() || telegramName || 'Muallif ismi';
+      $('deckPreviewImage').src = 'theme-previews/'+theme.id+'.jpg';
+      $('deckPreviewImage').alt = theme.name+' — haqiqiy birinchi slayd namunasi';
       $('previewTheme').textContent = theme.name + (state.template === 'auto' ? ' · mavzuga mos' : '');
       $('summaryTheme').textContent = state.template === 'auto' ? 'Mavzuga mos' : theme.name;
-      $('summaryDetails').textContent = state.slideCount+' slayd · '+languages[$('language').value];
-      $('summaryFormat').textContent = state.format === 'pdf' ? 'PDF (.pdf)' : 'PowerPoint (.pptx)';
+      $('summaryDetails').textContent = state.slideCount+' + 3 bonus = '+(state.slideCount+3)+' slayd';
+      $('summaryLanguage').textContent = languages[$('language').value] || 'Tanlanmagan';
       $('summaryPlan').textContent = plans[state.tariff].name;
       $('totalPrice').textContent = Number(state.tariff).toLocaleString('ru-RU').replace(/\u00a0/g,' ');
       $('topicCounter').textContent = $('topic').value.length+' / 150';
       $('autoTheme').setAttribute('aria-pressed',String(state.template === 'auto'));
       document.querySelectorAll('[data-count]').forEach(button => button.setAttribute('aria-pressed',String(Number(button.dataset.count) === state.slideCount)));
-      document.querySelectorAll('[data-format]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.format === state.format)));
       document.querySelectorAll('[data-tariff]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.tariff === state.tariff)));
     }
     function saveDraft() {
-      try { localStorage.setItem(DRAFT_KEY,JSON.stringify({topic:$('topic').value,name:$('name').value,language:$('language').value,slideCount:state.slideCount,template:state.template,tariff:state.tariff,format:state.format})); } catch(error) { /* Storage may be unavailable in private WebViews. */ }
+      // Name and language require an explicit choice each time the form opens.
+      try { localStorage.setItem(DRAFT_KEY,JSON.stringify({topic:$('topic').value,slideCount:state.slideCount,template:state.template,tariff:state.tariff})); } catch(error) { /* Storage may be unavailable in private WebViews. */ }
     }
     function restoreDraft() {
       try {
         const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
         if(!draft || typeof draft !== 'object') return;
         if(typeof draft.topic === 'string') $('topic').value = draft.topic.slice(0,150);
-        if(typeof draft.name === 'string') $('name').value = draft.name.slice(0,80);
-        if(Object.prototype.hasOwnProperty.call(languages,draft.language)) $('language').value = draft.language;
         if(counts.includes(Number(draft.slideCount))) state.slideCount = Number(draft.slideCount);
         if(draft.template === 'auto' || themes.some(theme => theme.id === draft.template)) state.template = draft.template;
-        if(['pptx','pdf'].includes(draft.format)) state.format = draft.format;
         if(Object.prototype.hasOwnProperty.call(plans,draft.tariff)) state.tariff = String(draft.tariff);
       } catch(error) { /* Ignore obsolete or malformed drafts. */ }
     }
-    function clearError() { $('topic').removeAttribute('aria-invalid'); $('topicError').hidden = true; $('globalNotice').hidden = true; }
+    function clearError() { ['topic','name','language'].forEach(id => { $(id).removeAttribute('aria-invalid'); $(id+'Error').hidden = true; }); $('globalNotice').hidden = true; }
     function changed() { clearError(); updatePreview(); saveDraft(); }
     function showNotice(message,success) { $('globalNotice').textContent = message; $('globalNotice').className = 'notice '+(success ? 'success' : 'error-notice'); $('globalNotice').hidden = false; $('globalNotice').focus(); }
     function newRequestId() {
@@ -331,11 +300,17 @@
       if(event) event.preventDefault();
       if(state.pending) return;
       clearError();
-      const topic = $('topic').value.trim();
-      if(topic.length < 3) { $('topic').setAttribute('aria-invalid','true'); $('topicError').textContent = 'Mavzu kamida 3 belgidan iborat bo‘lsin.'; $('topicError').hidden = false; $('topic').focus(); return; }
-      if(topic.length > 150) { showNotice('Mavzu 150 belgidan oshmasin.'); return; }
+      const topic = $('topic').value.replace(/\s+/g,' ').trim();
+      const name = $('name').value.replace(/\s+/g,' ').trim();
+      const language = $('language').value;
+      const errors = [];
+      if(topic.length < 3 || topic.length > 150 || /[\u0000-\u001f\u007f-\u009f]/.test(topic)) { $('topicError').textContent = 'Mavzu 3–150 belgidan iborat bo‘lsin.'; errors.push('topic'); }
+      if(name.length < 3 || name.length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || name.split(/\s+/).length < 2 || (name.match(/\p{L}/gu) || []).length < 3) { $('nameError').textContent = 'Ism va familiyangizni to‘liq kiriting (3–80 belgi).'; errors.push('name'); }
+      if(!Object.prototype.hasOwnProperty.call(languages,language)) errors.push('language');
+      errors.forEach(id => { $(id).setAttribute('aria-invalid','true'); $(id+'Error').hidden = false; });
+      if(errors.length) { $(errors[0]).focus(); return; }
       if(!canSend) { showNotice('Buyurtma yuborish uchun sahifani Telegram botdagi taqdimot sozlamalari tugmasidan oching.'); return; }
-      const payload = {topic:topic,name:($('name').value.trim() || telegramName || 'Foydalanuvchi').slice(0,80),language:$('language').value,slideCount:String(state.slideCount),template:state.template,tariff:state.tariff,format:state.format};
+      const payload = {topic:topic,name:name,language:language,slideCount:String(state.slideCount),template:state.template,tariff:state.tariff,format:'pptx'};
       const fingerprint = JSON.stringify(payload);
       if(state.requestFingerprint !== fingerprint || !state.requestId) { state.requestId = newRequestId(); state.requestFingerprint = fingerprint; }
       payload.requestId = state.requestId;
@@ -353,11 +328,10 @@
       } catch(error) { resetSubmission(); showNotice('Buyurtma yuborilmadi. Telegram ulanishini tekshirib, yana urinib ko‘ring.'); }
     }
 
-    $('countOptions').innerHTML = counts.map(count => '<button type="button" class="count-button" data-count="'+count+'" aria-pressed="'+(count === state.slideCount)+'">'+count+'</button>').join('');
+    $('countOptions').innerHTML = counts.map(count => '<button type="button" class="count-button" data-count="'+count+'" aria-pressed="'+(count === state.slideCount)+'" aria-label="'+count+' asosiy va 3 bonus, jami '+(count+3)+' slayd"><strong>'+count+'</strong><small>+ 3 bonus · '+(count+3)+' jami</small></button>').join('');
     $('themeFilters').innerHTML = filters.map(filter => '<button type="button" class="filter" data-filter="'+filter.id+'" aria-pressed="'+(filter.id === state.filter)+'">'+filter.name+'</button>').join('');
     $('planOptions').innerHTML = Object.keys(plans).map(tariff => '<button type="button" class="plan-button" data-tariff="'+tariff+'" aria-pressed="'+(tariff === state.tariff)+'"><span class="selection-mark" aria-hidden="true">✓</span><span class="plan-text"><strong>'+plans[tariff].name+'</strong><small>'+plans[tariff].detail+'</small></span><span class="plan-price">'+Number(tariff).toLocaleString('ru-RU')+' so‘m</span></button>').join('');
     $('countOptions').addEventListener('click',event => { const button = event.target.closest('[data-count]'); if(button) { state.slideCount = Number(button.dataset.count); changed(); } });
-    $('formatOptions').addEventListener('click',event => { const button = event.target.closest('[data-format]'); if(button) { state.format = button.dataset.format; changed(); } });
     $('planOptions').addEventListener('click',event => { const button = event.target.closest('[data-tariff]'); if(button) { state.tariff = button.dataset.tariff; changed(); } });
     $('themeGrid').addEventListener('click',event => { const button = event.target.closest('[data-theme]'); if(button) { state.template = button.dataset.theme; renderThemes(); changed(); } });
     $('autoTheme').addEventListener('click',() => { state.template = 'auto'; renderThemes(); changed(); });

@@ -1,723 +1,638 @@
 package uz.ai.slideshowbot.service;
 
+import jakarta.annotation.PreDestroy;
 import org.apache.poi.sl.usermodel.PictureData;
 import org.apache.poi.sl.usermodel.ShapeType;
+import org.apache.poi.sl.usermodel.TextParagraph.TextAlign;
+import org.apache.poi.sl.usermodel.TextShape.TextAutofit;
+import org.apache.poi.sl.usermodel.VerticalAlignment;
 import org.apache.poi.xslf.usermodel.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import uz.ai.slideshowbot.slides.SlideDeck;
+import uz.ai.slideshowbot.slides.SlideDeck.Layout;
+import uz.ai.slideshowbot.slides.SlideDeck.Slide;
+import uz.ai.slideshowbot.slides.SlideDeck.Source;
+import uz.ai.slideshowbot.slides.SlideTheme;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.font.FontRenderContext;
+import java.awt.font.LineBreakMeasurer;
+import java.awt.font.TextAttribute;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.*;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.text.AttributedString;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/** Native, editable, source-aware slides. A plan item always produces one slide. */
 @Service
 public class PptxCreatorService {
+    private static final int W = 960, H = 540, M = 48, FOOTER_Y = 500;
+    private static final String FONT = "Arial";
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, true);
+    private final ImageSearchService imageSearch;
+    private final ExecutorService imageWorkers;
 
-    @Autowired
-    private ImageSearchService imageSearchService;
-
-    private static final int W   = 960;
-    private static final int H   = 540;
-    private static final int BM  = 2;
-    private static final int BT  = 3;
-    private static final int PAD = 18;
-
-
-    private static final double FS_TOPIC     = 50.0;
-    private static final double FS_NAME      = 40.0;
-    private static final double FS_REJA_HEAD = 55.0;
-    private static final double FS_REJA_ITEM = 47.0;
-    private static final double FS_HEAD      = 28.0;
-    private static final double FS_BODY      = 24.0;
-
-    private static final AtomicInteger LAYOUT_COUNTER = new AtomicInteger(0);
-
-    private final ExecutorService imagePool = Executors.newFixedThreadPool(5);
-
-    public String createPptxFromSections(String topic, String userName, String subjectName,
-                                         List<GptTextGeneratorService.Section> sections,
-                                         String templateStr) throws IOException {
-        return createPptxFromSections(topic, userName, subjectName, sections, templateStr, "UZ");
+    public PptxCreatorService(ImageSearchService imageSearch) {
+        this.imageSearch = imageSearch;
+        AtomicInteger sequence = new AtomicInteger();
+        imageWorkers = new ThreadPoolExecutor(3, 3, 30, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(12), task -> {
+                    Thread worker = new Thread(task, "slide-images-" + sequence.incrementAndGet());
+                    worker.setDaemon(true);
+                    return worker;
+                }, new ThreadPoolExecutor.AbortPolicy());
     }
 
-    public String createPptxFromSections(String topic, String userName, String subjectName,
-                                         List<GptTextGeneratorService.Section> sections,
-                                         String templateStr, String language) throws IOException {
-        File dir = new File("slides");
-        if (!dir.exists()) dir.mkdirs();
-
-        int           tmplNum = parseTemplate(templateStr);
-        TemplateStyle style   = getTemplateStyle(tmplNum);
-        int           layout  = LAYOUT_COUNTER.getAndIncrement() % 10;
-        int           pattern = (tmplNum - 1) % 6;
-
-        String lang = (language != null) ? language : "UZ";
-
-        Map<Integer, byte[]> imgCache = prefetchImages(sections, topic);
-
-        XMLSlideShow ppt = new XMLSlideShow();
-        ppt.setPageSize(new Dimension(W, H));
-
-        createTitleSlide(ppt, topic, userName, subjectName, style, pattern);
-        createRejaSlide(ppt, sections, style, pattern, lang);
-
-        for (int i = 0; i < sections.size(); i++) {
-            GptTextGeneratorService.Section sec = sections.get(i);
-            List<GptTextGeneratorService.SlideContent> slides = sec.slides();
-            createSA(ppt, sec.title(), slides, style, layout, pattern);
-            if (!slides.isEmpty())   createSB(ppt, slides.get(0), style, layout, pattern);
-            if (slides.size() > 1)   createSC(ppt, slides.get(1), style, imgCache.get(i), layout, pattern);
-            if (slides.size() > 2)   createSD(ppt, slides.get(2), style, layout, pattern);
-        }
-        createThankYouSlide(ppt, userName, style, pattern, lang);
-
-        String safe     = topic.replaceAll("[^a-zA-Z0-9\\s]", "_").trim();
-        String fileName = "slides/" + safe + "_" + System.currentTimeMillis() + ".pptx";
-        try (FileOutputStream out = new FileOutputStream(fileName)) { ppt.write(out); }
-        ppt.close();
-        return fileName;
-    }
-
-    private Map<Integer, byte[]> prefetchImages(List<GptTextGeneratorService.Section> sections, String topic) {
-        Map<Integer, byte[]>         result  = new ConcurrentHashMap<>();
-        Map<Integer, Future<byte[]>> futures = new LinkedHashMap<>();
-        for (int i = 0; i < sections.size(); i++) {
-            List<GptTextGeneratorService.SlideContent> sls = sections.get(i).slides();
-            if (sls.size() <= 1) continue;
-            final int idx = i;
-            final String prompt = sls.get(1).imageQuery;
-            futures.put(idx, imagePool.submit(() -> {
-                try {
-                    byte[] bytes = imageSearchService.findImageBytes(prompt, topic);
-                    return (bytes != null && bytes.length > 1000) ? bytes : null;
-                } catch (Exception e) { return null; }
-            }));
-        }
-        futures.forEach((idx, f) -> {
-            try { byte[] b = f.get(90, TimeUnit.SECONDS); if (b != null) result.put(idx, b); }
-            catch (Exception ignored) {}
-        });
-        return result;
-    }
-
-    private void drawPattern(XSLFSlide slide, TemplateStyle style, int pattern) {
-        Color d1 = blend(style.titleColor, style.bgColor, 0.80f);
-        Color d2 = blend(style.titleColor, style.bgColor, 0.88f);
-        Color d3 = blend(style.titleColor, style.bgColor, 0.92f);
-
-        switch (pattern) {
-            case 0 -> {
-                drawFilled(slide, ShapeType.TRIANGLE, W-260, H-180, 220, 180, d1);
-                drawFilled(slide, ShapeType.TRIANGLE, W-160, H-120, 150, 120, d2);
-                drawFilled(slide, ShapeType.TRIANGLE, W-80,  H-80,  80,  80,  d3);
-            }
-            case 1 -> {
-                drawFilled(slide,  ShapeType.ELLIPSE, W-220, -80,  280, 280, d3);
-                drawOutline(slide, ShapeType.ELLIPSE, W-170, -40,  200, 200, d2, 2.0);
-                drawOutline(slide, ShapeType.ELLIPSE, W-120,   0,  120, 120, d1, 1.5);
-                drawFilled(slide,  ShapeType.ELLIPSE,     0, H-100, 120, 120, d3);
-                drawOutline(slide, ShapeType.ELLIPSE,   -30, H-60,   80,  80, d2, 1.5);
-            }
-            case 2 -> {
-                for (int x = W-200; x <= W-20; x += 28)
-                    for (int y = H-200; y <= H-20; y += 28)
-                        drawFilled(slide, ShapeType.ELLIPSE, x, y, 9, 9, d2);
-                for (int x = 20; x <= 120; x += 24)
-                    for (int y = 20; y <= 120; y += 24)
-                        drawFilled(slide, ShapeType.ELLIPSE, x, y, 6, 6, d3);
-            }
-            case 3 -> {
-                for (int i = 0; i < 4; i++) {
-                    int x = W - 90 + i * 22;
-                    int alpha = 255 - i * 30;
-                    Color lc = blend(style.titleColor, style.bgColor, 0.75f + i * 0.05f);
-                    drawFilled(slide, ShapeType.RECT, x, 0, 8, H, lc);
-                }
-            }
-            case 4 -> {
-                drawOutline(slide, ShapeType.HEXAGON, W-200, -30, 160, 160, d1, 2.5);
-                drawFilled(slide,  ShapeType.HEXAGON, W-130,  30,  90,  90, d2);
-                drawOutline(slide, ShapeType.HEXAGON, W-90, 110,  60,  60, d3, 1.5);
-                drawFilled(slide,  ShapeType.HEXAGON,    0, H-100, 70, 70, d3);
-                drawOutline(slide, ShapeType.HEXAGON,   20, H-60,  40, 40, d2, 1.0);
-            }
-            default -> {
-                drawFilled(slide,  ShapeType.RECT, W-110,  0, 50, 50, d2);
-                drawFilled(slide,  ShapeType.RECT, W-60,   0, 60, 30, d1);
-                drawFilled(slide,  ShapeType.RECT,   0, H-60, 60, 60, d2);
-                drawFilled(slide,  ShapeType.RECT,   0, H-30, 30, 30, d1);
-                drawOutline(slide, ShapeType.RECT, W-160, H-160, 130, 130, d3, 2.0);
-            }
-        }
-    }
-
-    private void createTitleSlide(XMLSlideShow ppt, String topic, String userName,
-                                  String subjectName, TemplateStyle style, int pattern) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        textBox(slide, topic.toUpperCase(), PAD, 45, W - PAD*2, 320,
-                FS_TOPIC, true, style.titleColor,
-                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-
-        String info = userName + (subjectName != null && !subjectName.isBlank() ? "  |  " + subjectName : "");
-        textBox(slide, info, PAD, H - 105, W - PAD*2, 80,
-                FS_NAME, false, style.titleColor,
-                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-
-        addBorder(slide);
-    }
-
-    private void createRejaSlide(XMLSlideShow ppt, List<GptTextGeneratorService.Section> sections,
-                                 TemplateStyle style, int pattern, String lang) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        String rejaTitle = switch (lang) {
-            case "RU"  -> "План";
-            case "ENG" -> "Outline";
-            default    -> "Reja";
-        };
-
-        textBox(slide, rejaTitle, PAD, BM + BT + 8, W - PAD*2, 80,
-                FS_REJA_HEAD, true, style.titleColor,
-                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-
-        int listY = BM + BT + 95;
-        int listH = H - listY - BM - BT - 12;
-
-        XSLFTextBox listBox = slide.createTextBox();
-        listBox.setAnchor(new Rectangle(PAD + 12, listY, W - PAD*2 - 24, listH));
-
-        for (int i = 0; i < Math.min(sections.size(), 5); i++) {
-            XSLFTextParagraph p = listBox.addNewTextParagraph();
-            p.setSpaceBefore(0.0);
-            p.setSpaceAfter(12.0);
-            XSLFTextRun r = p.addNewTextRun();
-            r.setText(clean(sections.get(i).title()));
-            r.setFontSize(FS_REJA_ITEM);
-            r.setBold(true);
-            r.setFontColor(style.titleColor);
-            r.setFontFamily("Calibri");
-        }
-
-        addBorder(slide);
-    }
-
-    private void createSA(XMLSlideShow ppt, String sectionTitle,
-                          List<GptTextGeneratorService.SlideContent> slides,
-                          TemplateStyle style, int layout, int pattern) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        String       title   = clean(sectionTitle);
-        List<String> bullets = (!slides.isEmpty() && slides.get(0).bullets != null)
-                ? slides.get(0).bullets : new ArrayList<>();
-
-        int innerTop    = BM + BT + 4;
-        int innerBottom = H - BM - BT - 4;
-        int innerH      = innerBottom - innerTop;
-
-        int titleH = Math.min(180, (int)(innerH * 0.40));
-        int titleY = innerTop;
-        int gapH   = 6;
-        int descY  = titleY + titleH + gapH;
-        int descH  = innerBottom - descY;
-        double titleFs = Math.min(52.0, Math.max(22.0, titleH * 0.35));
-
-        switch (layout) {
-            case 0 -> {
-                drawFilled(slide, ShapeType.RECT, BM+BT, innerTop, 10, innerH,
-                        blend(style.titleColor, style.bgColor, 0.3f));
-                textBox(slide, title, 28, titleY, W-38, titleH, titleFs, true, style.titleColor, null);
-                if (descH > 20) fillBody(slide, bullets, 28, descY, W-38, descH, style.textColor);
-            }
-            case 1 -> {
-                drawFilled(slide, ShapeType.RECT, W-BM-BT-10, innerTop, 10, innerH,
-                        blend(style.titleColor, style.bgColor, 0.3f));
-                textBox(slide, title, PAD, titleY, W-PAD*2-14, titleH, titleFs, true,
-                        style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (descH > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-14, descH, style.textColor);
-            }
-            case 2 -> {
-                int barH = Math.min(titleH, 72);
-                drawFilled(slide, ShapeType.RECT, BM, innerTop, W-BM*2, barH, style.titleColor);
-                textBox(slide, title, PAD, innerTop+4, W-PAD*2, barH-8,
-                        Math.min(36.0, barH*0.45), true, style.bgColor,
-                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                int d2Y = innerTop + barH + 8;
-                int d2H = innerBottom - d2Y;
-                if (d2H > 20) fillBody(slide, bullets, PAD, d2Y, W-PAD*2, d2H, style.textColor);
-            }
-            case 3 -> {
-                int panelW = W / 3;
-                drawFilled(slide, ShapeType.RECT, BM, innerTop, panelW, innerH, style.titleColor);
-                textBox(slide, title, BM+6, innerTop + innerH/2 - titleH/2,
-                        panelW-12, titleH, Math.min(30.0, titleFs*0.7), true, style.bgColor,
-                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                int dX = panelW + PAD;
-                int dW = W - panelW - PAD*2 - BM;
-                if (innerH > 20) fillBody(slide, bullets, dX, innerTop + 8, dW, innerH-16, style.textColor);
-            }
-            case 4 -> {
-                int barH4 = 70;
-                drawFilled(slide, ShapeType.RECT, BM, innerBottom-barH4, W-BM*2, barH4, style.titleColor);
-                textBox(slide, title, PAD, titleY, W-PAD*2, titleH, titleFs, true, style.titleColor, null);
-                int d4H = innerBottom - barH4 - titleY - titleH - gapH;
-                if (d4H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2, d4H, style.textColor);
-            }
-            case 5 -> {
-                int panelW5 = W / 3;
-                drawFilled(slide, ShapeType.RECT, W-panelW5-BM, innerTop, panelW5, innerH, style.titleColor);
-                int dW5 = W - panelW5 - PAD*2 - 10;
-                textBox(slide, title, PAD, titleY, dW5, titleH, titleFs, true, style.titleColor, null);
-                int d5H = innerBottom - descY;
-                if (d5H > 20) fillBody(slide, bullets, PAD, descY, dW5, d5H, style.textColor);
-            }
-            case 6 -> {
-                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, H-BM*2, style.titleColor);
-                textBox(slide, title, PAD, titleY, W-PAD*2, titleH, titleFs, true, style.bgColor, null);
-                if (descH > 20) fillBody_color(slide, bullets, PAD, descY, W-PAD*2, descH, style.bgColor);
-            }
-            case 7 -> {
-                int barH7 = 8;
-                drawFilled(slide, ShapeType.RECT, BM, innerTop, W-BM*2, barH7, style.titleColor);
-                drawFilled(slide, ShapeType.RECT, BM, innerBottom-barH7, W-BM*2, barH7, style.titleColor);
-                textBox(slide, title, PAD, innerTop+barH7+4, W-PAD*2, titleH,
-                        titleFs, true, style.titleColor,
-                        org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                int d7Y = innerTop+barH7+titleH+gapH+4;
-                int d7H = innerBottom-barH7-d7Y;
-                if (d7H > 20) fillBody(slide, bullets, PAD, d7Y, W-PAD*2, d7H, style.textColor);
-            }
-            case 8 -> {
-                textBox(slide, title, PAD, titleY, W-PAD*2, titleH, titleFs, true,
-                        style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (descH > 20) fillBody_center(slide, bullets, PAD, descY, W-PAD*2, descH, style.textColor);
-            }
-            default -> {
-                textBox(slide, title, PAD, titleY, W-PAD*2-60, titleH, titleFs, true, style.titleColor, null);
-                int d9H = innerBottom - descY;
-                if (d9H > 20) fillBody(slide, bullets, PAD, descY, W-PAD*2-60, d9H, style.textColor);
-            }
-        }
-
-        addBorder(slide);
-    }
-
-
-    private void createSB(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
-                          TemplateStyle style, int layout, int pattern) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        List<String> bullets  = content.bullets != null ? content.bullets : new ArrayList<>();
-        int          cnt      = Math.min(bullets.size(), 4);
-
-        int innerTop    = BM + BT + 2;
-        int innerBottom = H - BM - BT - 4;
-
-        int titleH = 44;
-        int titleY = innerTop;
-        int bodyY  = titleY + titleH + 4;
-        int bodyH  = innerBottom - bodyY;
-
-        switch (layout) {
-            case 0 -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (bodyH > 20) fillBody(slide, bullets, PAD, bodyY, W-PAD*2, bodyH, style.textColor);
-            }
-            case 1 -> {
-                drawFilled(slide, ShapeType.RECT, BM, innerTop, W-BM*2, titleH+4, style.titleColor);
-                textBox(slide, clean(content.title), PAD, innerTop+3, W-PAD*2, titleH, FS_HEAD, true,
-                        style.bgColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (bodyH > 20) fillBody(slide, bullets, PAD, bodyY, W-PAD*2, bodyH, style.textColor);
-            }
-            case 2 -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (cnt > 0 && bodyH > 20) {
-                    int half = cnt / 2 + cnt % 2;
-                    int w2   = (W - PAD*2 - 14) / 2;
-                    fillBody(slide, bullets.subList(0, half), PAD, bodyY, w2, bodyH, style.textColor);
-                    if (cnt > half)
-                        fillBody(slide, bullets.subList(half, cnt), PAD+w2+14, bodyY, w2, bodyH, style.textColor);
-                }
-            }
-            case 3 -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (cnt > 0 && bodyH > 20) {
-                    int iH = bodyH / cnt;
-                    Color cf = blend(style.bgColor, style.titleColor, 0.10f);
-                    Color cb = blend(style.titleColor, style.bgColor, 0.40f);
-                    for (int i = 0; i < cnt; i++) {
-                        int cy  = bodyY + i * iH;
-                        int ch  = iH - 4;
-                        if (cy + ch > innerBottom) ch = innerBottom - cy;
-                        if (ch < 10) break;
-                        XSLFAutoShape box = slide.createAutoShape();
-                        box.setShapeType(ShapeType.RECT);
-                        box.setAnchor(new Rectangle(PAD, cy, W-PAD*2, ch));
-                        box.setFillColor(cf); box.setLineColor(cb); box.setLineWidth(1.0);
-                        drawFilled(slide, ShapeType.RECT, PAD, cy, 6, ch, style.titleColor);
-                        textBox(slide, clean(bullets.get(i)), PAD+14, cy+3, W-PAD*2-18, ch-6,
-                                FS_BODY, false, style.titleColor, null);
+    public String createPptx(SlideDeck deck, String userName, String themeId) throws IOException {
+        Objects.requireNonNull(deck, "Presentation plan is required");
+        if (deck.slides().isEmpty()) throw new IOException("Presentation plan has no slides");
+        if (userName == null || userName.isBlank()) throw new IOException("Presentation author is required");
+        SlideTheme theme = SlideTheme.resolve(themeId, deck.title());
+        Map<Integer, ImageSearchService.ImageAsset> images = fetchImages(deck,theme);
+        Path directory = Path.of("slides");
+        Files.createDirectories(directory);
+        String safe = deck.title().replaceAll("[^\\p{L}\\p{N} -]", "_").strip();
+        if (safe.length() > 60) safe = safe.substring(0, 60);
+        if (safe.isBlank()) safe = "Presentation";
+        Path output = directory.resolve(safe + "_" + UUID.randomUUID() + ".pptx");
+        try (XMLSlideShow ppt = new XMLSlideShow()) {
+            ppt.setPageSize(new Dimension(W, H));
+            ppt.getProperties().getCoreProperties().setTitle(deck.title());
+            ppt.getProperties().getCoreProperties().setCreator("SlideBot");
+            ppt.getProperties().getCoreProperties().setSubjectProperty(theme.name());
+            for (int index = 0; index < deck.slides().size(); index++) {
+                Slide content = deck.slides().get(index);
+                XSLFSlide slide = ppt.createSlide();
+                slide.getBackground().setFillColor(theme.background());
+                boolean referenceDesign = referenceBackground(ppt, slide, theme, deck.title(), content.layout() == Layout.COVER);
+                if (!referenceDesign) background(slide, theme, index, content.layout() == Layout.COVER);
+                ImageSearchService.ImageAsset image = images.get(index);
+                if(referenceDesign && content.layout()==Layout.COVER) image=null;
+                if (content.layout() == Layout.COVER) {
+                    cover(ppt, slide, content, userName, theme, deck.language(), referenceDesign, image);
+                } else {
+                    int bodyY = header(slide, content, index, theme);
+                    boolean denseFacts=content.layout()!=Layout.AGENDA && content.layout()!=Layout.SOURCES
+                            && content.bullets().size()>=3 && (content.bullets().stream().mapToInt(String::length).sum()>760
+                            || content.bullets().stream().anyMatch(fact->fact.length()>260));
+                    if(denseFacts) factRows(slide,content.bullets(),bodyY,theme);
+                    else
+                    switch (content.layout()) {
+                        case AGENDA -> agenda(slide, content.bullets(), bodyY, theme);
+                        case CARDS -> cards(slide, content.bullets(), bodyY, theme);
+                        case SPLIT -> {
+                            if (image != null) split(ppt, slide, content.bullets(), bodyY, theme, image, index);
+                            else splitText(slide, content.bullets(), bodyY, theme);
+                        }
+                        case PROCESS -> process(slide, content.bullets(), bodyY, theme, false);
+                        case TIMELINE -> process(slide, content.bullets(), bodyY, theme, true);
+                        case COMPARISON -> comparison(slide, content.bullets(), bodyY, theme);
+                        case SUMMARY -> editorial(slide, content.bullets(), bodyY, theme, true);
+                        case SOURCES -> sources(slide, content, bodyY, theme);
+                        default -> {
+                            if (image != null) split(ppt, slide, content.bullets(), bodyY, theme, image, index);
+                            else editorial(slide, content.bullets(), bodyY, theme, false);
+                        }
                     }
                 }
+                footer(slide, content, index, deck.slides().size(), theme, image);
+                addNotes(ppt, slide, content, image, referenceDesign);
             }
-            case 4 -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (cnt > 0 && bodyH > 20) {
-                    int iH = bodyH / cnt;
-                    for (int i = 0; i < cnt; i++) {
-                        int cy = bodyY + i * iH;
-                        if (cy + iH > innerBottom) break;
-                        textBox(slide, String.valueOf(i+1), PAD, cy, 36, iH-2, 28.0, true, style.titleColor, null);
-                        textBox(slide, clean(bullets.get(i)), PAD+42, cy+2, W-PAD*2-46, iH-4,
-                                FS_BODY, false, style.textColor, null);
-                    }
+            try (OutputStream stream = Files.newOutputStream(output)) { ppt.write(stream); }
+        } catch (Exception failure) {
+            Files.deleteIfExists(output);
+            if (failure instanceof IOException io) throw io;
+            throw new IOException("Presentation rendering failed", failure);
+        }
+        return output.toString();
+    }
+
+    /** One sequential image pass per deck prevents duplicate URL races across slides. */
+    private Map<Integer, ImageSearchService.ImageAsset> fetchImages(SlideDeck deck,SlideTheme theme) {
+        Map<Integer, ImageSearchService.ImageAsset> found = new ConcurrentHashMap<>();
+        if (imageSearch == null) return found;
+        if (deck.slides().stream().noneMatch(s -> wantsImage(s) && !s.imageQuery().isBlank())) return found;
+        Future<?> job;
+        try {
+            job = imageWorkers.submit(() -> {
+                Set<String> excludedUrls = new HashSet<>(), hashes = new HashSet<>();
+                int maximum = Math.min(5, Math.max(2, deck.slides().size() / 3));
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(43);
+                for (int i = 0; i < deck.slides().size() && found.size() < maximum; i++) {
+                    if (Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline) break;
+                    Slide slide = deck.slides().get(i);
+                    if(slide.layout()==Layout.COVER && "1".equals(theme.id())
+                            && deck.title().toLowerCase(Locale.ROOT).matches(".*(xavfsiz|security|cyber|безопас|кибер).*")
+                            && getClass().getResource("/slides/cyber-cover.jpg")!=null) continue;
+                    if (!wantsImage(slide) || slide.imageQuery().isBlank()) continue;
+                    try {
+                        ImageSearchService.ImageAsset asset = imageSearch.findImage(slide.imageQuery(), deck.title(), Set.copyOf(excludedUrls));
+                        if (asset == null || asset.data() == null || asset.data().length == 0 || asset.url() == null
+                                || asset.url().isBlank() || excludedUrls.contains(asset.url())) continue;
+                        excludedUrls.add(asset.url());
+                        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(asset.data()));
+                        if (!hashes.add(hash)) continue;
+                        try (ByteArrayInputStream input = new ByteArrayInputStream(asset.data())) {
+                            BufferedImage decoded = ImageIO.read(input);
+                            if (decoded == null || decoded.getWidth() < 160 || decoded.getHeight() < 100) continue;
+                        }
+                        found.put(i, asset);
+                    } catch (Exception unavailable) { if (Thread.currentThread().isInterrupted()) break; }
+                }
+            });
+        } catch (RejectedExecutionException busy) { return found; }
+        try { job.get(45, TimeUnit.SECONDS); }
+        catch (InterruptedException interrupted) { job.cancel(true); Thread.currentThread().interrupt(); }
+        catch (Exception unavailable) { job.cancel(true); }
+        return new HashMap<>(found);
+    }
+
+    private static boolean wantsImage(Slide slide) {
+        return slide.layout() == Layout.COVER || slide.layout() == Layout.SPLIT || slide.layout() == Layout.EDITORIAL;
+    }
+
+    private void cover(XMLSlideShow ppt, XSLFSlide slide, Slide content, String userName, SlideTheme theme,
+                       String language, boolean referenceDesign, ImageSearchService.ImageAsset image) throws IOException {
+        String label = switch (language == null ? "UZ" : language) {
+            case "RU" -> "ПРЕЗЕНТАЦИЯ";
+            case "ENG" -> "PRESENTATION";
+            case "ES" -> "PRESENTACIÓN";
+            case "DE" -> "PRÄSENTATION";
+            case "TOJ" -> "МУАРРИФӢ";
+            case "TUR" -> "SUNUM";
+            default -> "TAQDIMOT";
+        };
+        label(slide, label, M, 48, 700, theme.accent());
+        rect(slide, M, 84, 72, 4, theme.accent());
+        int textWidth=referenceDesign || image!=null?510:W-2*M;
+        if(!referenceDesign) {
+            frame(slide,26,24,W-52,455,tint(theme,.20),.8);
+            rect(slide,W-M-7,52,7,59,theme.accent());
+        }
+        int lastSpace=content.title().lastIndexOf(' ');
+        if(content.title().length()<=46 && lastSpace>2) {
+            text(slide,content.title().substring(0,lastSpace),M,123,textWidth,85,58,32,true,theme.text());
+            text(slide,content.title().substring(lastSpace+1),M,211,textWidth,87,58,32,true,theme.accent());
+        } else text(slide,content.title(),M,119,textWidth,226,54,25,true,theme.text());
+        String authorLabel=switch(language==null?"UZ":language) {
+            case "RU"->"ПОДГОТОВИЛ(А)";case "ENG"->"PREPARED BY";case "ES"->"AUTORÍA";
+            case "DE"->"ERSTELLT VON";case "TOJ"->"ОМОДАКУНАНДА";case "TUR"->"HAZIRLAYAN";
+            default->"TAYYORLADI";
+        };
+        int authorWidth=referenceDesign || image!=null?510:W-2*M;
+        rect(slide,M,371,authorWidth,1,tint(theme,.3));
+        label(slide,authorLabel,M,388,authorWidth,theme.muted());
+        text(slide,userName,M,411,authorWidth,53,23,16,false,theme.text());
+        if (!referenceDesign && image!=null) {
+            frame(slide,605,107,315,354,tint(theme,.35),1);
+            photo(ppt,slide,image,614,116,297,336);
+        }
+    }
+
+    private int header(XSLFSlide slide, Slide content, int index, SlideTheme theme) {
+        label(slide,String.format(Locale.ROOT,"%02d",index+1),M,31,46,theme.accent());
+        if(!content.subtitle().isBlank() && content.layout()!=Layout.AGENDA)
+            text(slide,content.subtitle(),M+62,31,W-2*M-62,25,13,10,true,theme.muted());
+        rect(slide,M,59,34,3,theme.accent());
+        text(slide,content.title(),M,77,W-2*M,76,36,24,true,theme.text());
+        rect(slide,M,155,W-2*M,1,tint(theme,.18));
+        return 174;
+    }
+
+    /** An agenda contains section labels only, with a full-page rhythm for four, five or six sections. */
+    private void agenda(XSLFSlide slide,List<String> sections,int y,SlideTheme theme) {
+        if(sections.isEmpty()) return;
+        int count=sections.size(),gap=16,h=475-y;
+        if(count==5) {
+            int rowH=h/count;
+            for(int i=0;i<count;i++) {
+                int top=y+i*rowH;
+                rect(slide,M,top,W-2*M,rowH-8,i%2==0?theme.surface():tint(theme,.035));
+                rect(slide,M,top,3,rowH-8,theme.accent());
+                text(slide,String.format(Locale.ROOT,"%02d",i+1),M+18,top+10,50,rowH-21,26,21,true,theme.accent());
+                text(slide,sections.get(i),M+87,top+10,W-2*M-112,rowH-21,25,18,true,theme.text());
+            }
+            return;
+        }
+        int columns=2,rows=(count+1)/2,width=(W-2*M-gap)/columns,height=(h-gap*(rows-1))/rows;
+        for(int i=0;i<count;i++) {
+            int x=M+(i%2)*(width+gap),top=y+(i/2)*(height+gap);
+            rect(slide,x,top,width,height,theme.surface());
+            frame(slide,x,top,width,height,tint(theme,.24),.8);
+            rect(slide,x,top,3,height,theme.accent());
+            text(slide,String.format(Locale.ROOT,"%02d",i+1),x+20,top+20,56,height-38,34,26,true,theme.accent());
+            text(slide,sections.get(i),x+92,top+21,width-112,height-39,26,18,true,theme.text());
+        }
+    }
+
+    private void editorial(XSLFSlide slide, List<String> bullets, int y, SlideTheme theme, boolean summary) {
+        if (bullets.isEmpty()) return;
+        int h = 475 - y;
+        if (bullets.size() == 1) {
+            rect(slide,M,y,W-2*M,h,theme.surface());
+            frame(slide,M,y,W-2*M,h,tint(theme,.28),1);
+            rect(slide,M,y,6,h,theme.accent());
+            text(slide,bullets.get(0),M+35,y+31,W-2*M-70,h-61,33,20,true,theme.text());
+            return;
+        }
+        if(summary) {
+            splitText(slide,bullets,y,theme);
+            return;
+        }
+        if(bullets.size()==2) {
+            int gap=22,width=(W-2*M-gap)/2;
+            for(int i=0;i<2;i++) {
+                int x=M+i*(width+gap);
+                rect(slide,x,y,width,h,theme.surface());
+                frame(slide,x,y,width,h,tint(theme,.22),1);
+                rect(slide,x,y,width,4,i==0?theme.accent():tint(theme,.48));
+                text(slide,String.format(Locale.ROOT,"%02d",i+1),x+23,y+20,width-46,36,28,23,true,theme.accent());
+                text(slide,bullets.get(i),x+23,y+74,width-46,h-99,25,17,false,theme.text());
+            }
+            return;
+        }
+        if(bullets.size()==3) {
+            if(bullets.subList(1,3).stream().anyMatch(fact->fact.length()>210)) {
+                factRows(slide,bullets,y,theme); return;
+            }
+            int leadH=112,gap=17,width=(W-2*M-gap)/2,lowerY=y+leadH+gap,lowerH=h-leadH-gap;
+            rect(slide,M,y,W-2*M,leadH,tint(theme,.11));
+            frame(slide,M,y,W-2*M,leadH,tint(theme,.26),1);
+            rect(slide,M,y,5,leadH,theme.accent());
+            text(slide,"01",M+23,y+23,48,40,30,24,true,theme.accent());
+            text(slide,bullets.get(0),M+94,y+20,W-2*M-119,leadH-39,24,17,true,theme.text());
+            for(int i=1;i<3;i++) {
+                int x=M+(i-1)*(width+gap);
+                rect(slide,x,lowerY,width,lowerH,theme.surface());
+                frame(slide,x,lowerY,width,lowerH,tint(theme,.18),.8);
+                text(slide,String.format(Locale.ROOT,"%02d",i+1),x+21,lowerY+16,34,23,18,16,true,theme.accent());
+                text(slide,bullets.get(i),x+21,lowerY+52,width-42,lowerH-71,22,16,false,theme.text());
+            }
+            return;
+        }
+        cards(slide,bullets,y,theme);
+    }
+
+    /** Text-only split is intentional too: one leading point and a framed stack of supporting facts. */
+    private void splitText(XSLFSlide slide,List<String> bullets,int y,SlideTheme theme) {
+        if(bullets.size()<2) { editorial(slide,bullets,y,theme,false); return; }
+        if(bullets.subList(1,bullets.size()).stream().anyMatch(fact->fact.length()>240)) {
+            factRows(slide,bullets,y,theme); return;
+        }
+        int h=475-y,leftW=345,gap=25,rightX=M+leftW+gap,rightW=W-M-rightX;
+        rect(slide,M,y,leftW,h,tint(theme,.14));
+        frame(slide,M,y,leftW,h,tint(theme,.38),1.2);
+        rect(slide,M,y,5,h,theme.accent());
+        text(slide,"01",M+24,y+20,leftW-48,39,31,25,true,theme.accent());
+        text(slide,bullets.get(0),M+24,y+78,leftW-48,h-102,25,17,true,theme.text());
+        List<String> rest=bullets.subList(1,bullets.size()); int itemH=h/rest.size();
+        for(int i=0;i<rest.size();i++) {
+            int top=y+i*itemH;
+            rect(slide,rightX,top,rightW,itemH-10,theme.surface());
+            frame(slide,rightX,top,rightW,itemH-10,tint(theme,.18),.8);
+            text(slide,String.format(Locale.ROOT,"%02d",i+2),rightX+15,top+19,34,25,19,16,true,theme.accent());
+            text(slide,rest.get(i),rightX+66,top+17,rightW-84,itemH-43,23,15,false,theme.text());
+        }
+    }
+
+    /** Dense sourced facts use a wider reading measure, with row height allocated to actual text length. */
+    private void factRows(XSLFSlide slide,List<String> facts,int y,SlideTheme theme) {
+        int available=475-y,total=facts.stream().mapToInt(fact->Math.max(120,fact.length())).sum(),top=y;
+        for(int i=0;i<facts.size();i++) {
+            int rowH=i==facts.size()-1?475-top:Math.max(1,available*Math.max(120,facts.get(i).length())/total);
+            rect(slide,M,top,W-2*M,rowH-8,theme.surface());
+            frame(slide,M,top,W-2*M,rowH-8,tint(theme,.23),.8);
+            rect(slide,M,top,3,rowH-8,theme.accent());
+            text(slide,String.format(Locale.ROOT,"%02d",i+1),M+18,top+13,37,28,22,17,true,theme.accent());
+            text(slide,facts.get(i),M+76,top+11,W-2*M-97,rowH-28,24,14,false,theme.text());
+            top+=rowH;
+        }
+    }
+
+    private void cards(XSLFSlide slide, List<String> bullets, int y, SlideTheme theme) {
+        if (bullets.isEmpty()) return;
+        if (bullets.size()>4) { comparison(slide,bullets,y,theme); return; }
+        int count = bullets.size(), cols = count == 4 ? 2 : Math.min(3, count), rows = (count + cols - 1) / cols;
+        int gap = 17, width = (W - 2*M - gap * (cols-1)) / cols, height = (475 - y - gap * (rows-1)) / rows;
+        for (int i=0; i<count; i++) {
+            int x = M + (i % cols) * (width + gap), top = y + (i / cols) * (height + gap);
+            rounded(slide, x, top, width, height, theme.surface());
+            frame(slide,x,top,width,height,tint(theme,.24),.8);
+            if(count==4) {
+                rect(slide,x,top,3,height,theme.accent());
+                text(slide,String.format(Locale.ROOT,"%02d",i+1),x+16,top+17,28,24,17,15,true,theme.accent());
+                text(slide,bullets.get(i),x+57,top+16,width-75,height-32,21,14,false,theme.text());
+                continue;
+            }
+            rect(slide, x+18, top+20, 28, 3, theme.accent());
+            label(slide, String.format(Locale.ROOT, "%02d", i+1), x+width-49, top+15, 30, theme.muted());
+            String[] pieces = divideHeading(bullets.get(i));
+            if (!pieces[0].isBlank()) {
+                text(slide, pieces[0], x+18, top+41, width-36, Math.min(57, height/3), 22, 16, true, theme.text());
+                int bodyTop = top + Math.min(107, height/2);
+                text(slide, pieces[1], x+18, bodyTop, width-36, top+height-bodyTop-17, 19, 14, false, theme.muted());
+            } else text(slide, pieces[1], x+18, top+45, width-36, height-64, 23, 16, false, theme.text());
+        }
+    }
+
+    private void split(XMLSlideShow ppt, XSLFSlide slide, List<String> bullets, int y,
+                       SlideTheme theme, ImageSearchService.ImageAsset image, int index) throws IOException {
+        int photoW = 363, gap = 32, textW = W - 2*M - photoW - gap, h = 475-y;
+        boolean imageRight = index % 2 == 0;
+        int imageX = imageRight ? W-M-photoW : M, textX = imageRight ? M : M+photoW+gap;
+        rect(slide,imageX,y,photoW,h,theme.surface());
+        frame(slide,imageX,y,photoW,h,tint(theme,.3),1);
+        photo(ppt, slide, image, imageX+8, y+8, photoW-16, h-16);
+        rect(slide,textX,y,4,h,theme.accent());
+        bulletList(slide, bullets, textX+18, y+3, textW-18, h-6, theme, 22, true);
+    }
+
+    private void comparison(XSLFSlide slide, List<String> bullets, int y, SlideTheme theme) {
+        if (bullets.size() < 2) { editorial(slide, bullets, y, theme, false); return; }
+        int gap = 24, width = (W - 2*M - gap)/2, h=475-y, midpoint=(bullets.size()+1)/2;
+        for (int side=0; side<2; side++) {
+            int x=M+side*(width+gap);
+            rounded(slide, x, y, width, h, theme.surface());
+            frame(slide,x,y,width,h,tint(theme,.25),1);
+            rect(slide, x, y+3, width, 4, side==0 ? theme.accent() : tint(theme,.4));
+            List<String> group = side==0 ? bullets.subList(0,midpoint) : bullets.subList(midpoint,bullets.size());
+            bulletList(slide, group, x+24, y+22, width-48, h-44, theme, 23, true);
+        }
+    }
+
+    private void process(XSLFSlide slide, List<String> bullets, int y, SlideTheme theme, boolean timeline) {
+        if (bullets.isEmpty()) return;
+        if(timeline) {
+            int rowH=(475-y)/bullets.size();
+            rect(slide,M+24,y+16,2,Math.max(1,475-y-32),tint(theme,.35));
+            for(int i=0;i<bullets.size();i++) {
+                int top=y+i*rowH;
+                circle(slide,M+5,top+14,40,theme.surface(),theme.accent(),1.6);
+                text(slide,String.format(Locale.ROOT,"%02d",i+1),M+5,top+23,40,23,16,14,true,theme.accent(),TextAlign.CENTER);
+                rect(slide,M+75,top,W-2*M-75,rowH-12,theme.surface());
+                frame(slide,M+75,top,W-2*M-75,rowH-12,tint(theme,.19),.8);
+                text(slide,bullets.get(i),M+96,top+18,W-2*M-118,rowH-46,25,16,false,theme.text());
+            }
+            return;
+        }
+        int count=bullets.size(), gap=16, width=(W-2*M-gap*(count-1))/count, h=475-y;
+        if (width<150) { cards(slide, bullets, y, theme); return; }
+        if (timeline) rect(slide, M+18, y+25, W-2*M-36, 2, tint(theme,.28));
+        for (int i=0; i<count; i++) {
+            int x=M+i*(width+gap);
+            rect(slide,x,y+66,width,h-66,theme.surface());
+            frame(slide,x,y+66,width,h-66,tint(theme,.23),.8);
+            if (!timeline && i<count-1) line(slide, x+51,y+26,x+width+gap-7,y+26,theme.accent(),1.4);
+            circle(slide, x, y+2, 48, timeline ? theme.background() : theme.surface(), theme.accent(), 1.8);
+            text(slide, String.format(Locale.ROOT,"%02d",i+1),x,y+11,48,24,17,15,true,theme.accent(),TextAlign.CENTER);
+            String[] pieces=divideHeading(bullets.get(i));
+            if (!pieces[0].isBlank()) {
+                text(slide,pieces[0],x+17,y+83,width-34,60,22,16,true,theme.text());
+                text(slide,pieces[1],x+17,y+149,width-34,h-167,19,14,false,theme.muted());
+            } else text(slide,pieces[1],x+17,y+85,width-34,h-104,22,15,false,theme.text());
+        }
+    }
+
+    private void sources(XSLFSlide slide, Slide content, int y, SlideTheme theme) {
+        List<String> entries=content.bullets();
+        if (entries.isEmpty()) entries=content.sources().stream().map(s -> s.title() + "\n" + host(s.url())).toList();
+        if (entries.isEmpty()) return;
+        int columns=entries.size()>4?2:1, rows=(entries.size()+columns-1)/columns;
+        int gap=28,width=(W-2*M-gap*(columns-1))/columns,itemH=(475-y)/rows;
+        for (int i=0;i<entries.size();i++) {
+            int x=M+(i/rows)*(width+gap), top=y+(i%rows)*itemH;
+            rect(slide,x,top+itemH-8,width,1,tint(theme,.12));
+            label(slide,String.format(Locale.ROOT,"%02d",i+1),x,top+8,35,theme.accent());
+            text(slide,entries.get(i),x+47,top+5,width-47,itemH-19,21,14,false,theme.text());
+        }
+    }
+
+    private void bulletList(XSLFSlide slide, List<String> bullets, int x,int y,int width,int height,
+                            SlideTheme theme,double preferred,boolean separated) {
+        if (bullets.isEmpty() || height<=0) return;
+        int itemH=height/bullets.size();
+        for (int i=0;i<bullets.size();i++) {
+            int top=y+i*itemH;
+            if (separated && i>0) rect(slide,x,top-2,width,1,tint(theme,.12));
+            circle(slide,x,top+12,5,theme.accent(),null,0);
+            text(slide,bullets.get(i),x+19,top+5,width-19,itemH-11,preferred,14,false,theme.text());
+        }
+    }
+
+    private void footer(XSLFSlide slide, Slide content, int index,int count,SlideTheme theme,
+                        ImageSearchService.ImageAsset image) {
+        rect(slide,M,FOOTER_Y-9,W-2*M,1,tint(theme,.13));
+        String refs=content.sources().stream().map(s -> host(s.url())).filter(s -> !s.isBlank())
+                .distinct().limit(3).reduce((a,b)->a+"  ·  "+b).orElse("");
+        if (image!=null) refs+=(refs.isEmpty()?"":"  ·  ")+host(image.url());
+        if (!refs.isBlank() && content.layout()!=Layout.AGENDA) text(slide,refs,M,FOOTER_Y,715,17,9,8,false,theme.muted());
+        text(slide,String.format(Locale.ROOT,"%02d / %02d",index+1,count),W-M-86,FOOTER_Y,86,18,11,10,true,theme.muted(),TextAlign.RIGHT);
+    }
+
+    private void addNotes(XMLSlideShow ppt, XSLFSlide slide, Slide content, ImageSearchService.ImageAsset image, boolean referenceDesign) {
+        StringBuilder note=new StringBuilder(content.title()).append("\n\nTEXT SOURCES\n");
+        if (content.sources().isEmpty()) note.append("No external text source attached to this slide.\n");
+        for (Source source:content.sources()) note.append(source.title()).append('\n').append(source.url()).append("\n\n");
+        if (image!=null) note.append("IMAGE SOURCE\n").append(image.title()).append('\n').append(image.url()).append('\n').append(image.attribution()).append("\nPlacement: fitted to the image area, original aspect ratio retained.\n");
+        if (referenceDesign) note.append("\nDECORATIVE BACKGROUND\nUser-provided design reference: Tarmoq_xavfsizligi_10_slayd.pptx\n");
+        XSLFNotes notes=ppt.getNotesSlide(slide);
+        XSLFTextBox box=notes.createTextBox(); box.setAnchor(new Rectangle(30,80,650,650));
+        box.setText(note.toString()).setFontSize(11d);
+    }
+
+    private boolean referenceBackground(XMLSlideShow ppt, XSLFSlide slide, SlideTheme theme, String topic, boolean cover) {
+        String key = topic.toLowerCase(Locale.ROOT);
+        if (!"1".equals(theme.id()) || !(key.contains("xavfsiz") || key.contains("security") || key.contains("cyber")
+                || key.contains("безопас") || key.contains("кибер"))) return false;
+        try (InputStream input = getClass().getResourceAsStream("/slides/" + (cover ? "cyber-cover.jpg" : "cyber-body.jpg"))) {
+            if (input == null) return false;
+            XSLFPictureShape picture = slide.createPicture(ppt.addPicture(input.readAllBytes(), PictureData.PictureType.JPEG));
+            picture.setName("User-provided cybersecurity design background");
+            picture.setAnchor(new Rectangle(0, 0, W, H));
+            return true;
+        } catch (IOException unavailable) { return false; }
+    }
+
+    private void background(XSLFSlide slide,SlideTheme theme,int index,boolean cover) {
+        Color faint=tint(theme,.055);
+        switch(theme.decoration()) {
+            case GRID -> {
+                for(int x=0;x<W;x+=40) rect(slide,x,0,.5,H,faint);
+                for(int y=0;y<H;y+=40) rect(slide,0,y,W,.5,faint);
+            }
+            case DOTS -> {
+                for(int x=720;x<940;x+=22) for(int y=32;y<154;y+=22) circle(slide,x,y,2.5,tint(theme,.13),null,0);
+            }
+            case LINES -> { for(int i=0;i<5;i++) line(slide,720+i*40,0,960,110+i*35,faint,1); }
+            case FRAME -> { rect(slide,0,0,W,7,theme.accent()); rect(slide,W-14,20,2,135,tint(theme,.15)); }
+            case WAVES -> { for(int i=0;i<4;i++) circle(slide,780+i*24,-120,270+i*20,null,faint,2); }
+            case BOTANICAL -> {
+                for(int i=0;i<4;i++) {
+                    XSLFAutoShape leaf=shape(slide,ShapeType.ELLIPSE,800+i*25,-40+i*17,110,220,faint,null,0);
+                    leaf.setRotation(30+i*13);
                 }
             }
-            case 5 -> {
-                int tW = W / 3;
-                textBox(slide, clean(content.title), W-tW-PAD, innerTop, tW, innerBottom-innerTop,
-                        FS_HEAD, true, style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                int lW = W - tW - PAD*2 - 12;
-                if (lW > 20 && innerBottom-innerTop > 20)
-                    fillBody(slide, bullets, PAD, innerTop+4, lW, innerBottom-innerTop-8, style.textColor);
-            }
-            case 6 -> {
-                drawFilled(slide, ShapeType.RECT, BM, BM, W-BM*2, H-BM*2, style.titleColor);
-                addBoldTitle_color(slide, content.title, titleH, titleY, style.bgColor);
-                if (bodyH > 20) fillBody_color(slide, bullets, PAD, bodyY, W-PAD*2, bodyH, style.bgColor);
-            }
-            case 7 -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (cnt > 0 && bodyH > 20) {
-                    int iH = bodyH / cnt;
-                    for (int i = 0; i < cnt; i++) {
-                        int cy = bodyY + i * iH;
-                        if (cy + iH > innerBottom) break;
-                        if (i > 0) drawFilled(slide, ShapeType.RECT, PAD, cy-1, W-PAD*2, 1,
-                                blend(style.titleColor, style.bgColor, 0.5f));
-                        textBox(slide, clean(bullets.get(i)), PAD, cy+3, W-PAD*2, iH-5,
-                                FS_BODY, false, style.textColor, null);
-                    }
+            case ORBITS -> { circle(slide,790,-91,250,null,faint,1.8); circle(slide,842,-40,145,null,faint,1.2); }
+            case NETWORK -> {
+                int[][] nodes={{805,29},{866,71},{921,29},{915,132},{775,105}};
+                for(int i=0;i<nodes.length;i++) {
+                    int[] a=nodes[i],b=nodes[(i+1)%nodes.length];
+                    line(slide,a[0],a[1],b[0],b[1],faint,1);
+                    circle(slide,a[0]-3,a[1]-3,6,tint(theme,.11),null,0);
                 }
             }
-            case 8 -> {
-                textBox(slide, clean(content.title), PAD, innerTop, W-PAD*2, titleH, FS_HEAD, true,
-                        style.titleColor, org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-                if (bodyH > 20) fillBody_center(slide, bullets, PAD, bodyY, W-PAD*2, bodyH, style.textColor);
+        }
+    }
+
+    /** Native thematic geometry, never a fabricated replacement photo. */
+    private void scene(XSLFSlide slide,SlideTheme theme,int x,int y,int width,int height) {
+        Color subtle=tint(theme,.13);
+        switch(theme.decoration()) {
+            case NETWORK -> {
+                int cx=x+width/2,cy=y+height/2;
+                int[][] points={{x+23,y+34},{x+width-28,y+38},{x+14,y+height-40},{x+width-20,y+height-30},{x+width/2,y+4},{x+width/2,y+height-2}};
+                for(int[] p:points) {
+                    line(slide,cx,cy,p[0],p[1],subtle,2);
+                    circle(slide,p[0]-13,p[1]-13,26,theme.surface(),theme.accent(),1.4);
+                    circle(slide,p[0]-3,p[1]-3,6,theme.accent(),null,0);
+                }
+                shape(slide,ShapeType.HEXAGON,cx-49,cy-45,98,90,theme.surface(),theme.accent(),2);
+                circle(slide,cx-15,cy-18,30,null,theme.accent(),2); rect(slide,cx-19,cy+2,38,28,theme.accent());
+            }
+            case ORBITS -> {
+                for(int i=0;i<3;i++) { XSLFAutoShape orbit=shape(slide,ShapeType.ELLIPSE,x+4,y+65,width-8,90,null,theme.accent(),1.6); orbit.setRotation(i*60); }
+                circle(slide,x+width/2-18,y+height/2-18,36,theme.accent(),null,0);
+            }
+            case BOTANICAL -> {
+                line(slide,x+width/2,y+height,x+width/2,y+15,theme.accent(),2);
+                for(int i=0;i<3;i++) {
+                    XSLFAutoShape a=shape(slide,ShapeType.ELLIPSE,x+width/2-77,y+28+i*54,77,35,subtle,theme.accent(),1); a.setRotation(28);
+                    XSLFAutoShape b=shape(slide,ShapeType.ELLIPSE,x+width/2,y+48+i*54,77,35,subtle,theme.accent(),1); b.setRotation(-28);
+                }
+            }
+            case WAVES -> {
+                for(int i=0;i<4;i++) {
+                    line(slide,x,y+62+i*36,x+width/2,y+35+i*36,theme.accent(),2);
+                    line(slide,x+width/2,y+35+i*36,x+width,y+62+i*36,theme.accent(),2);
+                }
+            }
+            case LINES -> {
+                for(int i=0;i<5;i++) rounded(slide,x+i*43,y+height-(i+1)*34,25,(i+1)*34,i==4?theme.accent():subtle);
+                line(slide,x,y+height+8,x+width,y+height+8,theme.accent(),1);
             }
             default -> {
-                addBoldTitle(slide, content.title, style, titleH, titleY);
-                if (cnt > 0 && bodyH > 20) {
-                    int firstH = Math.min(80, bodyH / 2);
-                    textBox(slide, clean(bullets.get(0)), PAD, bodyY, W-PAD*2, firstH,
-                            FS_BODY+4, true, style.titleColor, null);
-                    int remY = bodyY + firstH + 4;
-                    int remH = innerBottom - remY;
-                    int rem  = cnt - 1;
-                    if (rem > 0 && remH > 20)
-                        fillBody(slide, bullets.subList(1, cnt), PAD+16, remY, W-PAD*2-20, remH, style.textColor);
+                for(int i=0;i<3;i++) {
+                    rounded(slide,x+i*18,y+i*40,width-i*36,70,theme.surface());
+                    rect(slide,x+i*18+18,y+i*40+20,36,4,theme.accent());
+                    rect(slide,x+i*18+18,y+i*40+35,width-i*36-36,3,subtle);
                 }
             }
         }
-
-        addBorder(slide);
     }
 
-    private void createSC(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
-                          TemplateStyle style, byte[] imgBytes, int layout, int pattern) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
+    private void photo(XMLSlideShow ppt,XSLFSlide slide,ImageSearchService.ImageAsset asset,int x,int y,int width,int height) throws IOException {
+        byte[] cropped=fitToFrame(asset.data(),width*2,height*2);
+        XSLFPictureData data=ppt.addPicture(cropped,PictureData.PictureType.PNG);
+        XSLFPictureShape picture=slide.createPicture(data);
+        picture.setName(asset.title()==null?"Source photograph":asset.title());
+        picture.setAnchor(new Rectangle(x,y,width,height));
+    }
 
-        List<String> bullets = content.bullets != null ? content.bullets : new ArrayList<>();
-        int cnt = Math.min(bullets.size(), 3);
+    /** Keep the complete source image, including any diagram labels at its edges. */
+    static byte[] fitToFrame(byte[] bytes,int width,int height) throws IOException {
+        BufferedImage original=ImageIO.read(new ByteArrayInputStream(bytes));
+        if(original==null || width<=0 || height<=0) throw new IOException("Unsupported image");
+        double scale=Math.min((double)width/original.getWidth(),(double)height/original.getHeight());
+        int scaledW=Math.max(1,(int)Math.round(original.getWidth()*scale)),scaledH=Math.max(1,(int)Math.round(original.getHeight()*scale));
+        BufferedImage target=new BufferedImage(width,height,BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics=target.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING,RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(original,(width-scaledW)/2,(height-scaledH)/2,scaledW,scaledH,null);
+        } finally { graphics.dispose(); }
+        ByteArrayOutputStream output=new ByteArrayOutputStream(); ImageIO.write(target,"png",output); return output.toByteArray();
+    }
 
-        int innerTop    = BM + BT + 2;
-        int innerBottom = H - BM - BT - 4;
-        int titleH = 44;
-        int titleY = innerTop;
-        int bodyY  = titleY + titleH + 4;
-        int bodyH  = innerBottom - bodyY;
-
-        addBoldTitle(slide, content.title, style, titleH, titleY);
-
-        Rectangle txtRect, imgRect;
-        if (layout % 2 == 0) {
-            txtRect = new Rectangle(PAD,    bodyY, W/2-16,       bodyH);
-            imgRect = new Rectangle(W/2+8,  bodyY, W/2-8-BM-BT,  bodyH);
-        } else {
-            imgRect = new Rectangle(BM+BT,  bodyY, W/2-16,       bodyH);
-            txtRect = new Rectangle(W/2+8,  bodyY, W/2-26,        bodyH);
+    private XSLFTextBox text(XSLFSlide slide,String value,double x,double y,double width,double height,double preferred,double minimum,boolean bold,Color color) {
+        return text(slide,value,x,y,width,height,preferred,minimum,bold,color,TextAlign.LEFT);
+    }
+    private XSLFTextBox text(XSLFSlide slide,String value,double x,double y,double width,double height,double preferred,double minimum,boolean bold,Color color,TextAlign align) {
+        XSLFTextBox box=slide.createTextBox(); box.setAnchor(new Rectangle2D.Double(x,y,width,Math.max(1,height)));
+        box.setLeftInset(0); box.setRightInset(0); box.setTopInset(0); box.setBottomInset(0);
+        box.setWordWrap(true); box.setVerticalAlignment(VerticalAlignment.TOP); box.setTextAutofit(TextAutofit.NORMAL);
+        String clean=clean(value); double fontSize=fit(clean,width,height,preferred,minimum,bold);
+        String[] paragraphs=clean.split("\\R",-1);
+        for(int i=0;i<paragraphs.length;i++) {
+            XSLFTextParagraph paragraph=i==0?box.getTextParagraphs().get(0):box.addNewTextParagraph();
+            paragraph.setTextAlign(align); paragraph.setSpaceBefore(0d); paragraph.setSpaceAfter(0d); paragraph.setLineSpacing(112d);
+            XSLFTextRun run=paragraph.addNewTextRun(); run.setText(paragraphs[i]); run.setFontFamily(FONT); run.setFontSize(fontSize); run.setBold(bold); run.setFontColor(color);
         }
-
-        if (cnt > 0 && bodyH > 20) {
-            int iH = txtRect.height / cnt;
-            for (int i = 0; i < cnt; i++) {
-                int cy = txtRect.y + i * iH;
-                if (cy + iH > innerBottom) break;
-                textBox(slide, clean(bullets.get(i)), txtRect.x, cy, txtRect.width, iH-4,
-                        FS_BODY, false, style.textColor, null);
-            }
+        for(int pass=0;pass<3;pass++) {
+            double measured=box.getTextHeight();
+            if(measured<=height+0.5 || fontSize<=minimum) break;
+            fontSize=Math.max(minimum,fontSize*Math.min(.94,(height-2)/measured));
+            for(XSLFTextParagraph paragraph:box.getTextParagraphs()) for(XSLFTextRun run:paragraph.getTextRuns()) run.setFontSize(fontSize);
         }
-        placeImage(ppt, slide, imgBytes, imgRect, style);
-        addBorder(slide);
+        return box;
     }
-
-    private void createSD(XMLSlideShow ppt, GptTextGeneratorService.SlideContent content,
-                          TemplateStyle style, int layout, int pattern) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        List<String> bullets = content.bullets != null ? content.bullets : new ArrayList<>();
-
-        int innerTop    = BM + BT + 2;
-        int innerBottom = H - BM - BT - 4;
-        int titleH = 44;
-
-        XSLFTextBox tb = slide.createTextBox();
-        tb.setAnchor(new Rectangle(PAD, innerTop, W-PAD*2, titleH));
-        XSLFTextParagraph tp = tb.addNewTextParagraph();
-        tp.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-        XSLFTextRun tr = tp.addNewTextRun();
-        tr.setText(content.title != null ? clean(content.title).toUpperCase() : "");
-        tr.setFontSize(18.0); tr.setBold(true);
-        tr.setFontColor(style.titleColor); tr.setFontFamily("Calibri");
-
-        int colY = innerTop + titleH + 4;
-        int colH = innerBottom - colY;
-        int gap  = 10;
-        int colW = (W - PAD*2 - gap*2) / 3;
-
-        for (int i = 0; i < 3; i++) {
-            int    colX = PAD + i * (colW + gap);
-            String text = i < bullets.size() ? clean(bullets.get(i)) : "";
-
-            switch (layout) {
-                case 0, 3, 6 -> {
-                    card(slide, colX, colY, colW, colH, style);
-                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, 7, style.titleColor);
-                    if (!text.isBlank())
-                        textBox(slide, text, colX+8, colY+11, colW-16, colH-14, FS_BODY, false, style.textColor, null);
-                }
-                case 1, 4, 7 -> {
-                    Color cf = blend(style.bgColor, style.titleColor, 0.18f);
-                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, colH, cf);
-                    drawFilled(slide, ShapeType.RECT, colX, colY, colW, 6, style.titleColor);
-                    if (!text.isBlank())
-                        textBox(slide, text, colX+8, colY+10, colW-16, colH-14, FS_BODY, false, style.textColor, null);
-                }
-                case 2, 5, 8 -> {
-                    drawFilled(slide, ShapeType.RECT, colX, colY, 4, colH, style.titleColor);
-                    if (!text.isBlank())
-                        textBox(slide, text, colX+12, colY+4, colW-14, colH-8, FS_BODY, false, style.textColor, null);
-                }
-                default -> {
-                    textBox(slide, String.valueOf(i+1), colX, colY, 40, 44, 28.0, true, style.titleColor, null);
-                    drawFilled(slide, ShapeType.RECT, colX, colY+48, colW, 3,
-                            blend(style.titleColor, style.bgColor, 0.4f));
-                    if (!text.isBlank())
-                        textBox(slide, text, colX, colY+56, colW, colH-60, FS_BODY, false, style.textColor, null);
-                }
-            }
+    private static double fit(String text,double width,double height,double preferred,double minimum,boolean bold) {
+        double size=preferred; while(size>minimum && estimatedHeight(text,width,size,bold)>height-2) size-=.5; return Math.max(size,minimum);
+    }
+    private static double estimatedHeight(String text,double width,double size,boolean bold) {
+        if(text.isEmpty()) return size*1.15;
+        Font font=new Font(FONT,bold?Font.BOLD:Font.PLAIN,1).deriveFont((float)size); int lines=0;
+        for(String paragraph:text.split("\\R",-1)) {
+            if(paragraph.isEmpty()) { lines++; continue; }
+            AttributedString attributed=new AttributedString(paragraph); attributed.addAttribute(TextAttribute.FONT,font);
+            LineBreakMeasurer measure=new LineBreakMeasurer(attributed.getIterator(),FRC);
+            while(measure.getPosition()<paragraph.length()) { measure.nextLayout((float)Math.max(1,width-3)); lines++; }
         }
-        addBorder(slide);
+        return lines*size*1.24;
     }
-
-
-    private void createThankYouSlide(XMLSlideShow ppt, String userName,
-                                     TemplateStyle style, int pattern, String lang) {
-        XSLFSlide slide = ppt.createSlide();
-        slide.getBackground().setFillColor(style.bgColor);
-        drawPattern(slide, style, pattern);
-
-        String thankYou = switch (lang) {
-            case "RU"  -> "Спасибо за внимание!";
-            case "ENG" -> "Thank you for your attention!";
-            default    -> "E'tiboringiz uchun rahmat!";
-        };
-
-        textBox(slide, thankYou, PAD, 110, W-PAD*2, 220,
-                46.0, true, style.titleColor,
-                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-        textBox(slide, userName, PAD, H-110, W-PAD*2, 72,
-                FS_NAME, false, style.titleColor,
-                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-        addBorder(slide);
+    private void label(XSLFSlide slide,String value,int x,int y,int width,Color color) { text(slide,value,x,y,width,18,11,9,true,color); }
+    private static Color tint(SlideTheme theme,double ratio) { return SlideTheme.mix(theme.background(),theme.accent(),ratio); }
+    private static Color contrast(Color color) {
+        double l=.2126*color.getRed()+.7152*color.getGreen()+.0722*color.getBlue(); return l>150?new Color(16,27,38):Color.WHITE;
     }
-
-    private void fillBody(XSLFSlide slide, List<String> bullets, int x, int y, int w, int h, Color color) {
-        if (bullets == null || bullets.isEmpty() || h <= 10) return;
-        XSLFTextBox lb = slide.createTextBox();
-        lb.setAnchor(new Rectangle(x, y, w, Math.min(h, H - y - BM - BT - 8)));
-
-        for (String text : bullets) {
-            XSLFTextParagraph p = lb.addNewTextParagraph();
-            p.setSpaceBefore(4.0);
-            p.setSpaceAfter(4.0);
-            XSLFTextRun r = p.addNewTextRun();
-            r.setText(clean(text));
-            r.setFontSize(FS_BODY);
-            r.setFontColor(color);
-            r.setFontFamily("Calibri");
-        }
+    private static String clean(String text) {
+        return text==null?"":text.replaceAll("\\*\\*([^*]+)\\*\\*","$1").replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]","").strip();
     }
-
-    private void fillBody_color(XSLFSlide slide, List<String> bullets,
-                                int x, int y, int w, int h, Color color) {
-        fillBody(slide, bullets, x, y, w, h, color);
+    private static String[] divideHeading(String text) {
+        String cleaned=clean(text); int colon=cleaned.indexOf(':');
+        if(colon>2 && colon<58 && colon<cleaned.length()-3) return new String[]{cleaned.substring(0,colon),cleaned.substring(colon+1).strip()};
+        return new String[]{"",cleaned};
     }
-
-    private void fillBody_center(XSLFSlide slide, List<String> bullets,
-                                 int x, int y, int w, int h, Color color) {
-        if (bullets == null || bullets.isEmpty() || h <= 4 || w <= 4) return;
-        int cnt = Math.min(bullets.size(), 4);
-        XSLFTextBox lb = slide.createTextBox();
-        lb.setAnchor(new Rectangle(x, y, w, Math.min(h, H - y - BM - BT - 4)));
-        for (int i = 0; i < cnt; i++) {
-            XSLFTextParagraph p = lb.addNewTextParagraph();
-            p.setSpaceBefore(0.0); p.setSpaceAfter(0.0);
-            p.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
-            XSLFTextRun r = p.addNewTextRun();
-            r.setText(clean(bullets.get(i)));
-            r.setFontSize(FS_BODY); r.setFontColor(color); r.setFontFamily("Calibri");
-        }
+    private static String host(String url) {
+        try { String host=URI.create(url).getHost(); return host==null?"":host.replaceFirst("^www\\.",""); } catch(Exception ignored) { return ""; }
     }
-
-    private void addBoldTitle(XSLFSlide slide, String title, TemplateStyle style, int h, int y) {
-        textBox(slide, clean(title), PAD, y, W - PAD*2, h,
-                FS_HEAD, true, style.titleColor, null);
+    private XSLFAutoShape shape(XSLFSlide slide,ShapeType type,double x,double y,double w,double h,Color fill,Color stroke,double lineWidth) {
+        XSLFAutoShape shape=slide.createAutoShape(); shape.setShapeType(type); shape.setAnchor(new Rectangle2D.Double(x,y,w,h)); shape.setFillColor(fill); shape.setLineColor(stroke);
+        if(stroke!=null) shape.setLineWidth(lineWidth); return shape;
     }
-
-    private void addBoldTitle_color(XSLFSlide slide, String title, int h, int y, Color color) {
-        textBox(slide, clean(title!=null?title:""), PAD, y, W-PAD*2, h,
-                FS_HEAD, true, color, null);
+    private void rect(XSLFSlide slide,double x,double y,double width,double height,Color fill) { shape(slide,ShapeType.RECT,x,y,width,height,fill,null,0); }
+    private void frame(XSLFSlide slide,double x,double y,double width,double height,Color color,double thickness) {
+        shape(slide,ShapeType.RECT,x,y,width,height,null,color,thickness);
     }
-
-    private void textBox(XSLFSlide slide, String text, int x, int y, int w, int h,
-                         double fontSize, boolean bold, Color color,
-                         org.apache.poi.sl.usermodel.TextParagraph.TextAlign align) {
-        if (w <= 0 || h <= 0) return;
-        int safeH = Math.min(h, H - y - BM - BT - 6);
-        XSLFTextBox box = slide.createTextBox();
-        box.setAnchor(new Rectangle(x, y, w, safeH));
-        XSLFTextParagraph p = box.addNewTextParagraph();
-        if (align != null) p.setTextAlign(align);
-        XSLFTextRun r = p.addNewTextRun();
-        r.setText(text);
-        r.setFontSize(fontSize);
-        r.setBold(bold);
-        r.setFontColor(color);
-        r.setFontFamily("Calibri");
+    private void rounded(XSLFSlide slide,int x,int y,int width,int height,Color fill) {
+        XSLFAutoShape card=shape(slide,ShapeType.ROUND_RECT,x,y,width,height,fill,null,0);
+        var preset=((org.openxmlformats.schemas.presentationml.x2006.main.CTShape)card.getXmlObject()).getSpPr().getPrstGeom();
+        var guides=preset.isSetAvLst()?preset.getAvLst():preset.addNewAvLst();
+        var radius=guides.addNewGd(); radius.setName("adj"); radius.setFmla("val 5500");
     }
-
-    private void card(XSLFSlide slide, int x, int y, int w, int h, TemplateStyle style) {
-        XSLFAutoShape s = slide.createAutoShape();
-        s.setShapeType(ShapeType.RECT);
-        s.setAnchor(new Rectangle(x, y, w, h));
-        s.setFillColor(blend(style.bgColor, style.titleColor, 0.12f));
-        s.setLineColor(blend(style.titleColor, style.bgColor, 0.40f));
-        s.setLineWidth(1.0);
+    private void circle(XSLFSlide slide,double x,double y,double diameter,Color fill,Color stroke,double thickness) { shape(slide,ShapeType.ELLIPSE,x,y,diameter,diameter,fill,stroke,thickness); }
+    private void line(XSLFSlide slide,double x1,double y1,double x2,double y2,Color color,double width) {
+        XSLFConnectorShape connector=slide.createConnector(); connector.setAnchor(new Rectangle2D.Double(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1)));
+        connector.setFlipVertical(y2<y1); connector.setLineColor(color); connector.setLineWidth(width);
     }
-
-    private void placeImage(XMLSlideShow ppt, XSLFSlide slide, byte[] imgBytes,
-                            Rectangle anchor, TemplateStyle style) {
-        if (imgBytes != null && imgBytes.length > 500) {
-            try {
-                XSLFPictureData pd;
-                try { pd = ppt.addPicture(imgBytes, PictureData.PictureType.PNG); }
-                catch (Exception e2) { pd = ppt.addPicture(imgBytes, PictureData.PictureType.JPEG); }
-                XSLFPictureShape pic = slide.createPicture(pd);
-                pic.setAnchor(anchor);
-                return;
-            } catch (Exception ignored) {}
-        }
-        Color c1 = blend(style.titleColor, style.bgColor, 0.4f);
-        Color c2 = blend(style.titleColor, style.bgColor, 0.6f);
-        int cx = anchor.x + anchor.width/2;
-        int cy = anchor.y + anchor.height/2;
-        int r  = Math.min(anchor.width, anchor.height) / 3;
-        XSLFAutoShape bg = slide.createAutoShape();
-        bg.setShapeType(ShapeType.RECT); bg.setAnchor(anchor);
-        bg.setFillColor(blend(style.bgColor, style.titleColor, 0.06f));
-        bg.setLineColor(c2); bg.setLineWidth(1.0);
-        drawOutline(slide, ShapeType.HEXAGON, cx-r, cy-r, r*2, r*2, c1, 3.0);
-        drawFilled(slide, ShapeType.ELLIPSE, cx-r/2, cy-r/2, r, r, c1);
-    }
-
-    private void addBorder(XSLFSlide slide) {
-        Color bc = Color.BLACK;
-        drawFilled(slide, ShapeType.RECT, BM,       BM,       W-BM*2, BT,    bc);
-        drawFilled(slide, ShapeType.RECT, BM,       H-BM-BT,  W-BM*2, BT,    bc);
-        drawFilled(slide, ShapeType.RECT, BM,       BM,       BT,     H-BM*2, bc);
-        drawFilled(slide, ShapeType.RECT, W-BM-BT,  BM,       BT,     H-BM*2, bc);
-    }
-
-    private void drawFilled(XSLFSlide slide, ShapeType type, int x, int y, int w, int h, Color fill) {
-        if (w <= 0 || h <= 0) return;
-        XSLFAutoShape s = slide.createAutoShape();
-        s.setShapeType(type); s.setAnchor(new Rectangle(x, y, w, h));
-        s.setFillColor(fill); s.setLineColor(fill);
-    }
-
-    private void drawOutline(XSLFSlide slide, ShapeType type, int x, int y, int w, int h,
-                             Color lc, double lw) {
-        if (w <= 0 || h <= 0) return;
-        XSLFAutoShape s = slide.createAutoShape();
-        s.setShapeType(type); s.setAnchor(new Rectangle(x, y, w, h));
-        s.setFillColor(new Color(0, 0, 0, 0));
-        s.setLineColor(lc); s.setLineWidth(lw);
-    }
-
-    private String clean(String text) {
-        if (text == null) return "";
-        return text.replaceAll("\\*\\*([^*]*)\\*\\*", "$1")
-                .replaceAll("\\*([^*]*)\\*", "$1")
-                .replaceAll("__([^_]*)__", "$1")
-                .replaceAll("_([^_]*)_", "$1").trim();
-    }
-
-    private Color blend(Color a, Color b, float ratio) {
-        float r = Math.min(1f, Math.max(0f, ratio));
-        return new Color((int)(a.getRed()*(1-r)+b.getRed()*r),
-                (int)(a.getGreen()*(1-r)+b.getGreen()*r),
-                (int)(a.getBlue()*(1-r)+b.getBlue()*r));
-    }
-
-    private int parseTemplate(String t) {
-        try { return Integer.parseInt(t != null ? t.trim() : "1"); }
-        catch (Exception e) { return 1; }
-    }
-
-    private TemplateStyle getTemplateStyle(int template) {
-        return switch (template) {
-            case 1  -> new TemplateStyle(Color.WHITE,           new Color(110, 83, 49),  Color.WHITE);           // malla dark → OQ matn
-            case 2  -> new TemplateStyle(new Color(40, 40, 40), new Color(181,156,115),  new Color(30,  10,  0)); // malla light → to'q jigarrang matn
-            case 3  -> new TemplateStyle(new Color(60, 40, 20), new Color(160,120, 80),  new Color(30,  10,  0)); // malla medium → to'q jigarrang matn
-            case 4  -> new TemplateStyle(Color.WHITE,           new Color( 46, 99, 58),  Color.WHITE);           // yashil → OQ
-            case 5  -> new TemplateStyle(Color.WHITE,           new Color( 74, 60,117),  Color.WHITE);           // binafsha → OQ
-            case 6  -> new TemplateStyle(Color.WHITE,           new Color( 34, 91,145),  Color.WHITE);           // ko'k → OQ
-            case 7  -> new TemplateStyle(Color.WHITE,           new Color( 14, 48,102),  Color.WHITE);           // to'q ko'k → OQ
-            case 8  -> new TemplateStyle(new Color(30, 30, 30), new Color(197,211,224),  Color.BLACK);           // och ko'k → QORA
-            case 9  -> new TemplateStyle(Color.WHITE,           new Color( 28, 66, 33),  Color.WHITE);           // to'q yashil → OQ
-            case 10 -> new TemplateStyle(new Color(20, 20, 20), new Color(180,195,210),  Color.BLACK);           // och ko'k → QORA
-            default -> new TemplateStyle(Color.BLACK,           Color.WHITE,             Color.BLACK);
-        };
-    }
-
-    private static class TemplateStyle {
-        final Color titleColor, bgColor, textColor;
-        TemplateStyle(Color t, Color b, Color tx) { titleColor=t; bgColor=b; textColor=tx; }
-    }
+    @PreDestroy public void shutdown() { imageWorkers.shutdownNow(); }
 }

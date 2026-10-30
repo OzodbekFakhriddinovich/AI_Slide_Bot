@@ -18,48 +18,54 @@ public class MenuService {
         String text = switch (currentLang) {
             case "RU" -> """
                     Привет, AI Presentation | Slide | PPT | PDF Bot!
-                    
+
                     Я предлагаю вам следующие услуги:
-                    
+
                     1. Создание слайдов – подготовка профессиональных презентаций в PowerPoint или других форматах.
                     2. PDF-документы – легкое преобразование изображений в формат PDF.
                     3. Zip-архивирование файлов – возможность легко конвертировать файлы в формат ZIP.
                     4. Подготовка тестов – создание автоматических тестов по любой теме (5000 сумов).
                     5. Подготовка рефератов – подготовка рефератов в формате Word (5000 сумов).
-                    
+
+                    <blockquote>ChatId: %d</blockquote>
+
                     /balance – ваш баланс в кошельке бота.
                     /buy – раздел покупок
-                    """;
+                    """.formatted(chatId);
 
             case "ENG" -> """
                     Hello AI Presentation | Slide | PPT | PDF Bot Welcome
-                    
+
                     I offer you the following services:
-                    
+
                     1. Creating slides – preparing professional presentations in PowerPoint or other formats.
                     2. PDF documents – easily converting images to PDF format.
                     3. Zipping files – the ability to easily convert files to zip format.
                     4. Preparing tests – creating automatic tests on any topic (5,000 soums).
                     5. Preparing essays – preparing essays in Word format (5,000 soums).
-                    
+
+                    <blockquote>ChatId: %d</blockquote>
+
                     /balance is your balance in the bot wallet.
                     /buy shopping section
-                    """;
+                    """.formatted(chatId);
 
             default -> """
                     Salom AI Taqdimot | Slayd | PPT | PDF Bot ga xush kelibsiz
-                    
+
                     Sizga quyidagi xizmatlarni taqdim etaman:
-                    
+
                     1. Slaydlar yaratish – PowerPoint yoki boshqa formatlarda professional taqdimotlar tayyorlash.
                     2. PDF hujjatlar – Rasmlarni osongina PDF formatiga o'zgartirish.
                     3. Fayllarni zip qilish – Fayllarni osongina zip formatiga o'zgartirish imkoniyati.
                     4. Test tayyorlash – Istalgan mavzuda avtomatik test yaratish (5,000 so'm).
                     5. Referat tayyorlash – Istalgan mavzuda avtomatik Referat yaratish (5,000 so'm).
-                    
+
+                    <blockquote>ChatId: %d</blockquote>
+
                     /balance sizning bot hamyonidagi balansingiz.
                     /buy xarid bo'limi
-                    """;
+                    """.formatted(chatId);
         };
 
         rawSender.sendColoredMainMenu(bot, chatId.toString(), text, currentLang);

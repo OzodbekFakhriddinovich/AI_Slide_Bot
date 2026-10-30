@@ -108,6 +108,47 @@ public class TelegramRawSender {
         }
     }
 
+    public void editMessageTextWithStyledCallbackBtn(SlideBot bot, String chatId, Integer messageId, String text, String btnText, String callbackData, String btnStyle) {
+        try {
+            String markup = buildCallbackMarkup(btnText, callbackData, btnStyle);
+            String json = """
+                {"chat_id":"%s","message_id":%d,"text":"%s","parse_mode":"HTML","reply_markup":%s}
+                """.formatted(esc(chatId), messageId, esc(text), markup);
+            RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+            String url = API + bot.getBotToken() + "/editMessageText";
+            Request request = new Request.Builder().url(url).post(body).build();
+            try (Response response = client.newCall(request).execute()) {
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void editMessageTextWithTwoStyledCallbackBtns(SlideBot bot, String chatId, Integer messageId, String text,
+                                                        String btn1Text, String cb1, String style1,
+                                                        String btn2Text, String cb2, String style2) {
+        try {
+            String markup = """
+            {
+              "inline_keyboard": [
+                [{"text": "%s", "callback_data": "%s", "style": "%s"}],
+                [{"text": "%s", "callback_data": "%s", "style": "%s"}]
+              ]
+            }
+            """.formatted(esc(btn1Text), esc(cb1), style1, esc(btn2Text), esc(cb2), style2);
+            String json = """
+                {"chat_id":"%s","message_id":%d,"text":"%s","parse_mode":"HTML","reply_markup":%s}
+                """.formatted(esc(chatId), messageId, esc(text), markup);
+            RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+            String url = API + bot.getBotToken() + "/editMessageText";
+            Request request = new Request.Builder().url(url).post(body).build();
+            try (Response response = client.newCall(request).execute()) {
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public void sendJoinRequestWithOneButton(SlideBot bot, String chatId, String text,
                                              String btnText, String btnUrl,
                                              String checkText, String checkCallback) {
