@@ -488,7 +488,7 @@ public class TestService {
                 """.formatted(count, topicLabel, topic, difficultyDesc, langInstruction,
                 count, correctLabel, count);
 
-        String responseJson = gptTextGeneratorService.callGemini(prompt);
+        String responseJson = gptTextGeneratorService.callGemini(prompt, false);
 
         JsonNode root = new ObjectMapper().readTree(responseJson);
         String rawText = root.path("candidates").get(0)

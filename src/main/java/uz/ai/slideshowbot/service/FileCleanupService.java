@@ -36,9 +36,9 @@ public class FileCleanupService {
             int wordPdfOut = fileRepository.deleteByFileTypeAndCreatedAtBefore("WORD_PDF_PDF", now.minusMinutes(30));
             int converted  = fileRepository.deleteByFileTypeAndCreatedAtBefore("WORD_PDF_RESULT", now.minusMinutes(30));
  
-            int testFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("TEST", now.minusMinutes(60));
+            int testFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("TEST", now.minusMinutes(30));
  
-            int checkFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("CHECK", now.minusHours(24));
+            int checkFiles = fileRepository.deleteByFileTypeAndCreatedAtBefore("CHECK", now.minusMinutes(30));
  
             int total = pdfImages + zipFiles + wordPdfIn + wordPdfOut + converted + testFiles + checkFiles;
             if (total > 0) {

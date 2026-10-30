@@ -51,6 +51,10 @@ public class PdfService {
         this.userRepository = userRepository;
     }
 
+    public void resetFlow(Long chatId) {
+        tempUserImages.remove(chatId);
+    }
+
     public boolean handlePdfFlow(Update update, SlideBot bot, UserEntity user) throws TelegramApiException {
         if (update == null || user == null) return false;
         Message msg = update.hasMessage() ? update.getMessage() : null;

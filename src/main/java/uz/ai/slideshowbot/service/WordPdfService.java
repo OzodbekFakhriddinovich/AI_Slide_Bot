@@ -10,17 +10,14 @@ import uz.ai.slideshowbot.entity.UserEntity;
 import uz.ai.slideshowbot.repository.FileRepository;
 import uz.ai.slideshowbot.repository.UserRepository;
 
-import com.aspose.words.Document;
-import com.aspose.words.SaveFormat;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-
 import java.io.*;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class WordPdfService {
@@ -157,36 +154,79 @@ public class WordPdfService {
     }
 
     private void doConvert(SlideBot bot, UserEntity user, Long chatId, FileEntity fe, Integer progressMsgId, String lang) {
+        AtomicBoolean isFinished = new AtomicBoolean(false);
+        Thread progressThread = null;
+
         try {
             String label = switch (lang) {
-                case "RU" -> "Конвертирую...";
-                case "ENG" -> "Converting...";
-                default -> "Aylantirilmoqda...";
+                case "RU" -> "⏳ Конвертирую файл...";
+                case "ENG" -> "⏳ Converting file...";
+                default -> "⏳ Fayl aylantirilmoqda...";
             };
 
-            for (int i = 1; i <= 3; i++) {
-                if (progressMsgId != null) rawSender.editMessageText(bot, chatId.toString(), progressMsgId, label + "\n" + buildBar(i * 33));
-                Thread.sleep(400);
+            // Bir tekis 1 daqiqalik progress bar (har 3 soniyada 5% dan)
+            if (progressMsgId != null) {
+                progressThread = new Thread(() -> {
+                    try {
+                        for (int pct = 5; pct <= 95 && !isFinished.get(); pct += 5) {
+                            Thread.sleep(3000);
+                            if (isFinished.get()) break;
+                            try {
+                                rawSender.editMessageText(bot, chatId.toString(), progressMsgId, label + "\n" + buildBar(pct));
+                            } catch (Exception ignored) {}
+                        }
+                    } catch (InterruptedException ignored) {}
+                });
+                progressThread.start();
             }
 
             boolean isDocx = "WORD_PDF_DOCX".equals(fe.getFileType());
+            String inputExt = isDocx ? ".docx" : ".pdf";
             String outputExt = isDocx ? ".pdf" : ".docx";
-            byte[] resultBytes;
 
-            try (InputStream inputStream = new ByteArrayInputStream(fe.getData());
-                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-
-                if (isDocx) {
-                    com.aspose.words.Document doc = new com.aspose.words.Document(inputStream);
-                    doc.save(outputStream, com.aspose.words.SaveFormat.PDF);
-                } else {
-                    com.aspose.pdf.Document pdfDocument = new com.aspose.pdf.Document(inputStream);
-                    pdfDocument.save(outputStream, com.aspose.pdf.SaveFormat.DocX);
-                }
-                resultBytes = outputStream.toByteArray();
+            // Temporary directory setup
+            String randomId = UUID.randomUUID().toString().substring(0, 8);
+            Path tempDir = Paths.get("/home/ubuntu/temp_convert_" + randomId);
+            if (!Files.exists(tempDir)) {
+                Files.createDirectories(tempDir);
             }
 
-            if (progressMsgId != null) rawSender.deleteMessageById(bot, chatId.toString(), progressMsgId);
+            Path inputFilePath = tempDir.resolve("input" + inputExt);
+            Path outputFilePath = tempDir.resolve(isDocx ? "input.pdf" : "output.docx");
+
+            Files.write(inputFilePath, fe.getData());
+
+            // Run ILovePDF-grade local Linux engines
+            String mode = isDocx ? "word2pdf" : "pdf2word";
+            ProcessBuilder pb = new ProcessBuilder("python3", "/home/ubuntu/convert_doc.py", mode, inputFilePath.toString(), outputFilePath.toString());
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+            proc.waitFor(120, TimeUnit.SECONDS);
+
+            byte[] resultBytes;
+            if (Files.exists(outputFilePath)) {
+                resultBytes = Files.readAllBytes(outputFilePath);
+            } else {
+                throw new RuntimeException("Konvertatsiya fayli yaratilmadi!");
+            }
+
+            // Cleanup temp files
+            try {
+                Files.deleteIfExists(inputFilePath);
+                Files.deleteIfExists(outputFilePath);
+                Files.deleteIfExists(tempDir);
+            } catch (Exception ignored) {}
+
+            isFinished.set(true);
+            if (progressThread != null) progressThread.interrupt();
+
+            if (progressMsgId != null) {
+                try {
+                    rawSender.editMessageText(bot, chatId.toString(), progressMsgId, label + "\n" + buildBar(100));
+                    Thread.sleep(500);
+                    rawSender.deleteMessageById(bot, chatId.toString(), progressMsgId);
+                } catch (Exception ignored) {}
+            }
 
             String origName = fe.getFileName() != null ? fe.getFileName() : "file";
             String resultFileName = origName.replaceAll("(?i)\\.(docx|pdf)$", "") + outputExt;
@@ -212,9 +252,11 @@ public class WordPdfService {
 
         } catch (Exception e) {
             e.printStackTrace();
+            isFinished.set(true);
+            if (progressThread != null) progressThread.interrupt();
             if (progressMsgId != null) rawSender.deleteMessageById(bot, chatId.toString(), progressMsgId);
             try { fileRepository.deleteById(fe.getId()); } catch (Exception ignored) {}
-            rawSender.sendSimpleMessage(bot, chatId.toString(), "❌ Xatolik: " + e.getMessage());
+            rawSender.sendSimpleMessage(bot, chatId.toString(), "❌ Xatolik yuz berdi: " + e.getMessage());
         }
     }
 

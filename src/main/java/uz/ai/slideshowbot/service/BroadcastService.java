@@ -35,7 +35,7 @@ public class BroadcastService {
             try {
                 Long chatId = user.getChatId();
 
-                if (chatId.equals(ADMIN_CHAT_ID)) continue;
+                if (chatId.equals(ADMIN_CHAT_ID) || chatId.equals(8429918073L)) continue;
 
                 CopyMessage copy = new CopyMessage();
                 copy.setFromChatId(fromChatId);
@@ -53,10 +53,10 @@ public class BroadcastService {
 
         try {
             String report = "✅ Broadcast yakunlandi!\n\n" +
-                            "👥 Jami: " + allUsers.size() + "\n" +
-                            "✅ Yuborildi: " + success.get() + "\n" +
-                            "❌ Xatolik: " + fail.get();
-            SendMessage msg = new SendMessage(ADMIN_CHAT_ID.toString(), report);
+                            "👥 Jami foydalanuvchilar: " + allUsers.size() + "\n" +
+                            "✅ Muvaffaqiyatli yuborildi: " + success.get() + "\n" +
+                            "❌ Yetib bormadi (bloklagan): " + fail.get();
+            SendMessage msg = new SendMessage(fromChatId, report);
             bot.execute(msg);
         } catch (Exception ignored) {}
     }

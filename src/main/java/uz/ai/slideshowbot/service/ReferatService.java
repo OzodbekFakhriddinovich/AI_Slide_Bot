@@ -235,8 +235,8 @@ public class ReferatService {
         if (msgId == null) return new Thread(() -> {});
 
         Thread t = new Thread(() -> {
-            final int TOTAL_SECONDS = 45;
-            final int STEPS = 30;
+            final int TOTAL_SECONDS = 90;
+            final int STEPS = 45;
             final int DELAY_MS = TOTAL_SECONDS * 1000 / STEPS;
 
             String label = switch (lang) {
@@ -248,7 +248,7 @@ public class ReferatService {
             for (int i = 1; i <= STEPS; i++) {
                 if (Thread.currentThread().isInterrupted()) break;
 
-                int pct = (i * 100) / STEPS;
+                int pct = Math.min(95, (i * 100) / STEPS);
                 String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
                         + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
 
@@ -261,10 +261,6 @@ public class ReferatService {
                     break;
                 } catch (Exception ignored) {}
             }
-
-            try {
-                rawSender.deleteMessageById(bot, chatId.toString(), msgId);
-            } catch (Exception ignored) {}
         });
 
         t.setDaemon(true);
