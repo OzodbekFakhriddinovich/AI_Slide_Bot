@@ -17,13 +17,19 @@ class SlideRequestTest {
 
     @Test void acceptsOnlyRequestedBodyCountsAndPowerPoint() {
         for (int count : new int[]{10, 15, 20}) {
-            SlideRequest request = SlideRequest.from(payload().put("slideCount", count).put("language", "TUR").put("template", "24"), "Fallback", "legacy_request_123");
-            assertEquals(count, request.slideCount()); assertEquals("TUR", request.language());
+            SlideRequest request = SlideRequest.from(payload().put("slideCount", count).put("language", "ENG").put("template", "24"), "Fallback", "legacy_request_123");
+            assertEquals(count, request.slideCount()); assertEquals("ENG", request.language());
             assertEquals("24", request.template()); assertEquals("pptx", request.format());
         }
         for (int count : new int[]{5, 9, 11, 25, 30})
             assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("slideCount", count), "Name", "legacy_request_123"));
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("format", "pdf"), "Name", "legacy_request_123"));
+    }
+
+    @Test void serverUsesBotLanguageInsteadOfWebAppPayload() {
+        SlideRequest request = SlideRequest.from(payload().put("language", "ENG"), "Fallback",
+                "legacy_request_123", "RU");
+        assertEquals("RU", request.language());
     }
 
     @Test void refusesForgedPricesAndFractionalNumbers() {
@@ -36,6 +42,7 @@ class SlideRequestTest {
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("slideCount", "31"), "Name", "legacy_request_123"));
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("template", "25"), "Name", "legacy_request_123"));
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("language", "XX"), "Name", "legacy_request_123"));
+        assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("language", "TUR"), "Name", "legacy_request_123"));
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("format", "exe"), "Name", "legacy_request_123"));
         assertThrows(IllegalArgumentException.class, () -> SlideRequest.from(payload().put("topic", "a".repeat(151)), "Name", "legacy_request_123"));
     }

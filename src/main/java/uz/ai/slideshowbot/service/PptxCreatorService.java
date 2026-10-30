@@ -13,6 +13,7 @@ import uz.ai.slideshowbot.slides.SlideDeck.Layout;
 import uz.ai.slideshowbot.slides.SlideDeck.Slide;
 import uz.ai.slideshowbot.slides.SlideDeck.Source;
 import uz.ai.slideshowbot.slides.SlideTheme;
+import uz.ai.slideshowbot.slides.SlideLanguage;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -105,7 +106,7 @@ public class PptxCreatorService {
                     }
                 }
                 footer(slide, content, index, deck.slides().size(), theme, image);
-                addNotes(ppt, slide, content, image, referenceDesign);
+                addNotes(ppt, slide, content, image, referenceDesign, deck.language());
             }
             try (OutputStream stream = Files.newOutputStream(output)) { ppt.write(stream); }
         } catch (Exception failure) {
@@ -438,12 +439,19 @@ public class PptxCreatorService {
         text(slide,String.format(Locale.ROOT,"%02d / %02d",index+1,count),W-M-86,FOOTER_Y,86,18,11,10,true,theme.muted(),TextAlign.RIGHT);
     }
 
-    private void addNotes(XMLSlideShow ppt, XSLFSlide slide, Slide content, ImageSearchService.ImageAsset image, boolean referenceDesign) {
-        StringBuilder note=new StringBuilder(content.title()).append("\n\nTEXT SOURCES\n");
-        if (content.sources().isEmpty()) note.append("No external text source attached to this slide.\n");
+    private void addNotes(XMLSlideShow ppt, XSLFSlide slide, Slide content, ImageSearchService.ImageAsset image, boolean referenceDesign, String language) {
+        boolean ru="RU".equals(SlideLanguage.normalize(language)), en="ENG".equals(SlideLanguage.normalize(language));
+        String textSources=ru?"ТЕКСТОВЫЕ ИСТОЧНИКИ":en?"TEXT SOURCES":"MATN MANBALARI";
+        String noSource=ru?"К этому слайду не прикреплён внешний текстовый источник.\n":en?"No external text source attached to this slide.\n":"Bu slaydga tashqi matn manbasi biriktirilmagan.\n";
+        String imageSource=ru?"ИСТОЧНИК ИЗОБРАЖЕНИЯ":en?"IMAGE SOURCE":"RASM MANBASI";
+        String placement=ru?"Размещение: изображение вписано в область с сохранением исходных пропорций.\n":en?"Placement: fitted to the image area, original aspect ratio retained.\n":"Joylashuv: rasm nisbatlari saqlangan holda ajratilgan sohaga joylashtirildi.\n";
+        String background=ru?"\nДЕКОРАТИВНЫЙ ФОН\n":en?"\nDECORATIVE BACKGROUND\n":"\nBEZAK FONI\n";
+        String designReference=ru?"Образец дизайна предоставлен пользователем: Tarmoq_xavfsizligi_10_slayd.pptx\n":en?"User-provided design reference: Tarmoq_xavfsizligi_10_slayd.pptx\n":"Foydalanuvchi bergan dizayn namunasi: Tarmoq_xavfsizligi_10_slayd.pptx\n";
+        StringBuilder note=new StringBuilder(content.title()).append("\n\n").append(textSources).append('\n');
+        if (content.sources().isEmpty()) note.append(noSource);
         for (Source source:content.sources()) note.append(source.title()).append('\n').append(source.url()).append("\n\n");
-        if (image!=null) note.append("IMAGE SOURCE\n").append(image.title()).append('\n').append(image.url()).append('\n').append(image.attribution()).append("\nPlacement: fitted to the image area, original aspect ratio retained.\n");
-        if (referenceDesign) note.append("\nDECORATIVE BACKGROUND\nUser-provided design reference: Tarmoq_xavfsizligi_10_slayd.pptx\n");
+        if (image!=null) note.append(imageSource).append('\n').append(image.title()).append('\n').append(image.url()).append('\n').append(image.attribution()).append('\n').append(placement);
+        if (referenceDesign) note.append(background).append(designReference);
         XSLFNotes notes=ppt.getNotesSlide(slide);
         XSLFTextBox box=notes.createTextBox(); box.setAnchor(new Rectangle(30,80,650,650));
         box.setText(note.toString()).setFontSize(11d);

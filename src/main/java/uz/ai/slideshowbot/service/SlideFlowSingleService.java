@@ -18,6 +18,7 @@ import uz.ai.slideshowbot.entity.SlideOrderEntity;
 import uz.ai.slideshowbot.entity.UserEntity;
 import uz.ai.slideshowbot.slides.SlideDeck;
 import uz.ai.slideshowbot.slides.SlideRequest;
+import uz.ai.slideshowbot.slides.SlideLanguage;
 import java.io.IOException;
 import java.nio.file.*;
 import java.time.LocalDateTime;
@@ -52,13 +53,13 @@ public class SlideFlowSingleService {
 
     public void handleWebAppData(UserEntity user, Message message, SlideBot bot) {
         Long chatId = message.getChatId();
-        String language = user.getLanguage() == null ? "UZ" : user.getLanguage();
+        String language = SlideLanguage.normalize(user.getLanguage());
         try {
             String raw = message.getWebAppData().getData();
             if (raw == null || raw.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 4096)
                 throw new IllegalArgumentException("Forma ma'lumoti noto'g'ri. Web appni qayta oching.");
             SlideRequest request = SlideRequest.from(json.readTree(raw), user.getFirstName(),
-                    "legacy_" + chatId + "_" + message.getMessageId());
+                    "legacy_" + chatId + "_" + message.getMessageId(), language);
             if (workers.getQueue().remainingCapacity() == 0) {
                 send(bot, chatId, localized(language, "Hozir buyurtmalar ko'p. Birozdan so'ng qayta urinib ko'ring.",
                         "Сейчас много заказов. Попробуйте немного позже.", "The queue is full. Please try again shortly."));
@@ -94,7 +95,10 @@ public class SlideFlowSingleService {
                     localized(language, "💳 Balansni to'ldirish", "💳 Пополнить баланс", "💳 Top up balance"),
                     "BALANCE_PAY", "success");
         } catch (IllegalArgumentException e) {
-            send(bot, chatId, e.getMessage());
+            send(bot, chatId, localized(language,
+                    "Forma ma'lumotlarini tekshiring va qayta yuboring.",
+                    "Проверьте данные формы и отправьте её снова.",
+                    "Check the form details and submit it again."));
         } catch (Exception e) {
             System.err.println("Slide order rejected: " + e.getClass().getSimpleName());
             send(bot, chatId, localized(language, "Buyurtmani qabul qilib bo'lmadi. Qayta urinib ko'ring.",
@@ -291,20 +295,28 @@ public class SlideFlowSingleService {
     }
 
     private static String localized(String language, String uz, String ru, String en) {
-        return "RU".equals(language) ? ru : "ENG".equals(language) ? en : uz;
+        return "RU".equals(SlideLanguage.normalize(language)) ? ru
+                : "ENG".equals(SlideLanguage.normalize(language)) ? en : uz;
     }
 
     public void handleCallback(UserEntity user, CallbackQuery query, SlideBot bot) {
         try {
             AnswerCallbackQuery answer = new AnswerCallbackQuery();
             answer.setCallbackQueryId(query.getId());
-            answer.setText("Taqdimot yaratish uchun menyudagi web appni oching.");
+            String language = SlideLanguage.normalize(user.getLanguage());
+            answer.setText(localized(language, "Taqdimot yaratish uchun menyudagi WebApp’ni oching.",
+                    "Чтобы создать презентацию, откройте WebApp в меню.",
+                    "Open the WebApp from the menu to create a presentation."));
             bot.execute(answer);
         } catch (Exception ignored) {}
     }
 
     public void handleMessage(UserEntity user, Message message, SlideBot bot) {
-        send(bot, message.getChatId(), "Taqdimot sozlamalarini menyudagi web app orqali kiriting.");
+        String language = SlideLanguage.normalize(user.getLanguage());
+        send(bot, message.getChatId(), localized(language,
+                "Taqdimot sozlamalarini menyudagi WebApp orqali kiriting.",
+                "Настройте презентацию в WebApp из меню.",
+                "Set up your presentation in the WebApp from the menu."));
     }
 
     @PreDestroy public void shutdown() { progressClock.shutdownNow(); workers.shutdown(); }
