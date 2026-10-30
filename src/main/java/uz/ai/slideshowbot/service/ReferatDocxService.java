@@ -95,11 +95,11 @@ public class ReferatDocxService {
     public byte[] generate(String mavzu, String ism, int sahifa, String lang) throws Exception {
         int bobCount = SAHIFA_BOB.getOrDefault(sahifa, 3);
         String[][] bobNames = buildBobNames(bobCount, lang);
-        Map<String, Object> content = fetchContent(mavzu, bobCount, bobNames, lang);
-        return buildDocument(mavzu, ism, lang, bobNames, content);
+        Map<String, Object> content = fetchContent(mavzu, sahifa, bobCount, bobNames, lang);
+        return buildDocument(mavzu, ism, sahifa, lang, bobNames, content);
     }
 
-    private Map<String, Object> fetchContent(String mavzu, int bobCount, String[][] bobNames, String lang) throws Exception {
+    private Map<String, Object> fetchContent(String mavzu, int pages, int bobCount, String[][] bobNames, String lang) throws Exception {
         String langNote = switch (lang) {
             case "RU"  -> "Write ALL text in RUSSIAN language.";
             case "ENG" -> "Write ALL text in ENGLISH language.";
@@ -125,24 +125,25 @@ public class ReferatDocxService {
 Siz professional akademik tadqiqotchi, fan doktori va oliy o'quv yurtlari uchun darslik hamda ilmiy referatlar muallifisiz.
 Mavzu: "%s". %s
 Boblar soni: %d ta.
+Asosiy mazmun uchun sahifalar: %d ta. 15 sahifada 3 bob, 20 sahifada 4 bob bo'ladi.
 
 SIZNING VAZIFANGIZ:
-Berilgan mavzu boyicha HAQIQIY, TO'LIQ va CHUQUR ILMIY REFERAT (kamida 5,000 soz) yozish!
+Berilgan mavzu bo'yicha HAQIQIY, TO'LIQ va CHUQUR ILMIY REFERAT yozish. Asosiy mazmun kamida %d so'z bo'lsin.
 
 QAT'IY TALABLAR:
 1. Hech qanday umumiy, yuzaki gaplar bolmasin. Faqat chuqur nazariy va amaliy tahlil, aniq statistika (foizlar, raqamlar, yillar), olimlar va tadqiqotchilar ismlari, kitoblar va ilmiy manbalar bolsin.
-2. Har bir kichik bolim (subsection) KAMIDA 400 soz bolishi va kamida 3 ta toliq xatboshidan (paragraphs) iborat bolishi SHART!
-3. KIRISH qismi KAMIDA 750 soz va kamida 6 ta toliq xatboshidan iborat bolsin (mavzuning dolzarbligi, tarixi, maqsadi, vazifalari, metodologiyasi).
-4. XULOSA qismi KAMIDA 550 soz bolib, har bir bob natijalarini va kelajakdagi takliflarni qamrab olsin (5 ta katta xatboshi).
+2. Har bir kichik bo'lim kamida 280 so'z va kamida 3 ta mazmunli xatboshidan iborat bo'lsin.
+3. KIRISH qismi kamida 450 so'z, mavzuning dolzarbligi, maqsadi, vazifalari va metodologiyasini qamrasin.
+4. XULOSA kamida 300 so'z bo'lib, boblar natijalari va aniq tavsiyalarni jamlasin.
 5. FOYDALANILGAN ADABIYOTLAR royxatida kamida 12 ta real kitob, monografiya va nufuzli ilmiy manbalar bolsin.
 6. Matnni MARKDOWN formatida, quyidagi sarlavha strukturasi bilan yozing:
 
 # KIRISH
-<Kirish matni kamida 750 soz, 6 ta katta xatboshi>
+<Kirish matni kamida 450 so'z>
 
 %s
 # XULOSA
-<Xulosa matni kamida 550 soz, 5 ta katta xatboshi>
+<Xulosa matni kamida 300 so'z>
 
 # FOYDALANILGAN ADABIYOTLAR
 1. <Muallif. Asar nomi. - Shahar: Nashriyot, Yil. - Betlar.>
@@ -154,7 +155,7 @@ MUHIM:
 - Har bir bolim (# KIRISH, # BOB, ## 1.1, # XULOSA, # FOYDALANILGAN ADABIYOTLAR) aniq korsatilgan Markdown formatida bolsin.
 - Har bir xatboshi orasi bosh qator (ikkita yangi qator \\n\\n) bilan ajratilsin.
 - Hech qanday JSON ishlatmang! Faqat toza matn va Markdown sarlavhalari yozing.
-""", mavzu, langNote, bobCount, bobStructure.toString());
+""", mavzu, langNote, bobCount, pages, pages * 300, bobStructure.toString());
 
         try {
         String responseJson = gptService.callGemini(prompt, false);
@@ -166,14 +167,43 @@ MUHIM:
         Map<String, Object> result = parseMarkdownContent(raw, bobCount, bobNames, mavzu, lang);
         System.out.println("✅ Referat kontenti muvaffaqiyatli parse qilindi! Chapters: " +
                 ((result.get("chapters") instanceof List<?> l) ? l.size() : 0));
-        if (((List<?>) result.getOrDefault("chapters", List.of())).size() >= bobCount) return result;
+        if (isComplete(result,bobCount,pages)) return result;
+        System.err.println("Referat response did not meet the requested content and page-length checks; trying source-backed generation.");
         throw new IllegalStateException("Generated essay is incomplete.");
         } catch (Exception modelUnavailable) {
-            return sourceBasedReferat(mavzu,bobCount,bobNames,lang);
+            return sourceBasedReferat(mavzu,pages,bobCount,bobNames,lang);
         }
     }
 
-    private Map<String,Object> sourceBasedReferat(String topic,int bobCount,String[][] bobNames,String lang) throws Exception {
+    private int countWords(Map<String, Object> content) {
+        StringBuilder all = new StringBuilder(String.valueOf(content.getOrDefault("introduction", "")))
+                .append(' ').append(String.valueOf(content.getOrDefault("conclusion", "")));
+        Object chaptersRaw=content.get("chapters");
+        if(chaptersRaw instanceof List<?> chapters) for(Object chapterRaw:chapters) if(chapterRaw instanceof Map<?,?> chapter) {
+            Object subsectionsRaw=chapter.get("subsections");
+            if(subsectionsRaw instanceof List<?> subsections) for(Object subsectionRaw:subsections)
+                if(subsectionRaw instanceof Map<?,?> subsection) all.append(' ').append(String.valueOf(subsection.get("text")));
+        }
+        String text=all.toString().trim();
+        return text.isEmpty()?0:text.split("\\s+").length;
+    }
+
+    private boolean isComplete(Map<String,Object> content,int bobCount,int pages) {
+        Object raw=content.get("chapters");
+        if(!(raw instanceof List<?> chapters) || chapters.size()<bobCount || countWords(content)<pages*220) return false;
+        for(int i=0;i<bobCount;i++) {
+            if(!(chapters.get(i) instanceof Map<?,?> chapter) || !(chapter.get("subsections") instanceof List<?> subsections)
+                    || subsections.size()<3) return false;
+            for(int j=0;j<3;j++) {
+                if(!(subsections.get(j) instanceof Map<?,?> subsection)) return false;
+                String body=String.valueOf(subsection.get("text")).trim();
+                if(body.isEmpty() || body.split("\\s+").length<100) return false;
+            }
+        }
+        return true;
+    }
+
+    private Map<String,Object> sourceBasedReferat(String topic,int pages,int bobCount,String[][] bobNames,String lang) throws Exception {
         String target=WebResearchService.wikiLanguage(lang);
         var bundle=webResearchService.research(topic,lang,bobCount*3+1,0);
         record Fact(String heading,String text,String title,String url) {}
@@ -206,6 +236,7 @@ MUHIM:
         Map<String,Object> result=new HashMap<>();
         result.put("introduction",intro.toString().trim()); result.put("conclusion",conclusion.toString().trim());
         result.put("chapters",chapters); result.put("references",new ArrayList<>(references));
+        if(!isComplete(result,bobCount,pages)) throw new java.io.IOException(WebResearchService.unavailable(lang));
         return result;
     }
 
@@ -327,7 +358,7 @@ MUHIM:
     }
 
     @SuppressWarnings("unchecked")
-    private byte[] buildDocument(String mavzu, String ism, String lang,
+    private byte[] buildDocument(String mavzu, String ism, int pages, String lang,
                                  String[][] bobNames, Map<String, Object> content) throws Exception {
         XWPFDocument doc = new XWPFDocument();
         applyPageSetup(doc);
@@ -339,33 +370,64 @@ MUHIM:
         buildRejaPage(doc, lang, bobNames);
         pageBreak(doc);
 
-        String kirishText = getStr(content, "introduction", "kirish", "Kirish");
-        buildSection(doc, lbl("KIRISH", lang), kirishText);
-
         List<Map<String, Object>> chapters = (List<Map<String, Object>>) content.getOrDefault("chapters", new ArrayList<>());
-        for (int i = 0; i < bobNames.length; i++) {
-            pageBreak(doc);
-            Map<String, Object> bob = i < chapters.size() ? chapters.get(i) : new HashMap<>();
-            buildBob(doc, bobNames[i][1], bob);
+        List<String> bodyPages = buildBodyPages(content, pages, lang, bobNames, chapters);
+        for(int page=0;page<bodyPages.size();page++) {
+            if(page>0) pageBreak(doc);
+            buildSection(doc, page==0?lbl("KIRISH",lang):bodyPageHeading(page,pages,bobNames), bodyPages.get(page));
         }
-
         pageBreak(doc);
         String xulosaTxt = getStr(content, "conclusion", "xulosa", "Xulosa", "Conclusion");
         buildSection(doc, lbl("XULOSA_H", lang), xulosaTxt);
-
-        pageBreak(doc);
         Object adatRaw = content.getOrDefault("references",
                 content.getOrDefault("adabiyotlar", new ArrayList<>()));
         List<String> adatList = new ArrayList<>();
         if (adatRaw instanceof List<?> lst) {
             for (Object o : lst) if (o != null) adatList.add(o.toString());
         }
+        emptyLine(doc);
         buildAdabiyotlar(doc, lang, adatList);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         doc.write(baos);
         doc.close();
         return baos.toByteArray();
+    }
+
+    private List<String> buildBodyPages(Map<String,Object> content,int pages,String lang,String[][] bobNames,List<Map<String,Object>> chapters) {
+        record Piece(String heading,String text) {}
+        List<Piece> pieces=new ArrayList<>();
+        pieces.add(new Piece(lbl("KIRISH",lang),getStr(content,"introduction","kirish","Kirish")));
+        for(int i=0;i<chapters.size();i++) {
+            Map<String,Object> chapter=chapters.get(i);
+            String chapterHeading=i<bobNames.length?bobNames[i][1]:String.valueOf(chapter.getOrDefault("chapter_name",""));
+            Object subsRaw=chapter.get("subsections");
+            if(subsRaw instanceof List<?> subs) for(Object subRaw:subs) if(subRaw instanceof Map<?,?> sub) {
+                String heading=String.valueOf(sub.containsKey("title")?sub.get("title"):"");
+                String text=String.valueOf(sub.containsKey("text")?sub.get("text"):"");
+                if(!text.isBlank()) pieces.add(new Piece(chapterHeading+(heading.isBlank()?"":" — "+heading),text));
+            }
+        }
+        List<String> words=new ArrayList<>();
+        for(Piece piece:pieces) for(String word:piece.text().trim().split("\\s+")) words.add(word);
+        if(words.isEmpty()) throw new IllegalStateException("Referat body content is empty");
+        List<String> result=new ArrayList<>(); int cursor=0;
+        for(int page=0;page<pages;page++) {
+            int remaining=words.size()-cursor, pagesLeft=pages-page;
+            int take=Math.max(1,(int)Math.ceil((double)remaining/pagesLeft));
+            int end=Math.min(words.size(),cursor+take);
+            StringBuilder body=new StringBuilder();
+            for(int i=cursor;i<end;i++) body.append(words.get(i)).append(' ');
+            result.add(body.toString().trim());
+            cursor=end;
+        }
+        if(cursor<words.size()) throw new IllegalStateException("Referat content exceeds requested page count");
+        return result;
+    }
+
+    private String bodyPageHeading(int page,int pages,String[][] bobNames) {
+        int chapter=Math.min(bobNames.length-1,Math.max(0,(page-1)*bobNames.length/Math.max(1,pages-1)));
+        return bobNames[chapter][1];
     }
 
     private String getStr(Map<String, Object> m, String... keys) {
@@ -493,7 +555,7 @@ MUHIM:
             spacing(p);
             XWPFRun r = p.createRun();
             r.setFontFamily("Times New Roman");
-            r.setFontSize(14);
+            r.setFontSize(8);
             r.setBold(false);
             r.setText(item);
         }

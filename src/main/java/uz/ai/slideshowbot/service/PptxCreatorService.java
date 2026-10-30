@@ -40,12 +40,15 @@ public class PptxCreatorService {
     private static final String FONT = "Arial";
     private static final FontRenderContext FRC = new FontRenderContext(null, true, true);
     private final ImageSearchService imageSearch;
+    private final FalImageGenerationService falImageGeneration;
     private final ExecutorService imageWorkers;
 
-    public PptxCreatorService(ImageSearchService imageSearch) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public PptxCreatorService(ImageSearchService imageSearch,FalImageGenerationService falImageGeneration) {
         this.imageSearch = imageSearch;
+        this.falImageGeneration=falImageGeneration;
         AtomicInteger sequence = new AtomicInteger();
-        imageWorkers = new ThreadPoolExecutor(5, 5, 30, TimeUnit.SECONDS,
+        imageWorkers = new ThreadPoolExecutor(7, 7, 30, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(48), task -> {
                     Thread worker = new Thread(task, "slide-images-" + sequence.incrementAndGet());
                     worker.setDaemon(true);
@@ -53,11 +56,14 @@ public class PptxCreatorService {
                 }, new ThreadPoolExecutor.AbortPolicy());
     }
 
+    public PptxCreatorService(ImageSearchService imageSearch) { this(imageSearch,null); }
+
     public String createPptx(SlideDeck deck, String userName, String themeId) throws IOException {
         Objects.requireNonNull(deck, "Presentation plan is required");
         if (deck.slides().isEmpty()) throw new IOException("Presentation plan has no slides");
         if (userName == null || userName.isBlank()) throw new IOException("Presentation author is required");
         SlideTheme theme = SlideTheme.resolve(themeId, deck.title());
+        boolean imageDeck=deck.slides().stream().anyMatch(s->wantsImage(s)&&!s.imageQuery().isBlank());
         Map<Integer, ImageSearchService.ImageAsset> images = fetchImages(deck,theme);
         Path directory = Path.of("slides");
         Files.createDirectories(directory);
@@ -111,6 +117,7 @@ public class PptxCreatorService {
                 addNotes(ppt, slide, content, image, referenceDesign, deck.language());
             }
             try (OutputStream stream = Files.newOutputStream(output)) { ppt.write(stream); }
+            if(imageDeck && Files.size(output)<4_000_000L) throw new IOException("Presentation image quality check failed: the deck is smaller than 4 MB.");
         } catch (Exception failure) {
             Files.deleteIfExists(output);
             if (failure instanceof IOException io) throw io;
@@ -120,16 +127,18 @@ public class PptxCreatorService {
     }
 
     /** One sequential image pass per deck prevents duplicate URL races across slides. */
-    private Map<Integer, ImageSearchService.ImageAsset> fetchImages(SlideDeck deck,SlideTheme theme) {
+    private Map<Integer, ImageSearchService.ImageAsset> fetchImages(SlideDeck deck,SlideTheme theme) throws IOException {
         Map<Integer, ImageSearchService.ImageAsset> found = new ConcurrentHashMap<>();
-        if (imageSearch == null) return found;
-        if (deck.slides().stream().noneMatch(s -> wantsImage(s) && !s.imageQuery().isBlank())) return found;
+        int required=(int)deck.slides().stream().filter(s->wantsImage(s)&&!s.imageQuery().isBlank()).count();
+        if(required==0) return found;
+        if (imageSearch == null && (falImageGeneration==null || !falImageGeneration.isConfigured()))
+            throw new IOException("Image generation is not configured; refusing to create a text-only presentation.");
         Future<?> job;
         try {
             job = imageWorkers.submit(() -> {
                 Set<String> excludedUrls = ConcurrentHashMap.newKeySet(), hashes = ConcurrentHashMap.newKeySet();
                 int maximum = (int) deck.slides().stream().filter(s -> s.layout()!=Layout.AGENDA && s.layout()!=Layout.SOURCES).count();
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(75);
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(180);
                 List<Future<?>> requests=new ArrayList<>();
                 for (int i = 0; i < deck.slides().size() && found.size() < maximum; i++) {
                     if (Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline) break;
@@ -141,7 +150,10 @@ public class PptxCreatorService {
                     final int index=i; final Slide candidate=slide;
                     requests.add(imageWorkers.submit(() -> {
                         try {
-                            ImageSearchService.ImageAsset asset=imageSearch.findImage(candidate.imageQuery(),deck.title(),excludedUrls);
+                            ImageSearchService.ImageAsset asset=null;
+                            if(falImageGeneration!=null && falImageGeneration.isConfigured())
+                                asset=falImageGeneration.generate(deck.title(),candidate.title(),candidate.imageQuery(),candidate.bullets());
+                            else if(imageSearch!=null) asset=imageSearch.findImage(candidate.imageQuery(),deck.title(),excludedUrls);
                             if(asset==null || asset.data()==null || asset.data().length==0 || asset.url()==null || asset.url().isBlank()) return;
                             excludedUrls.add(asset.url());
                             String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(asset.data()));
@@ -162,9 +174,10 @@ public class PptxCreatorService {
                 }
             });
         } catch (RejectedExecutionException busy) { return found; }
-        try { job.get(78, TimeUnit.SECONDS); }
+        try { job.get(183, TimeUnit.SECONDS); }
         catch (InterruptedException interrupted) { job.cancel(true); Thread.currentThread().interrupt(); }
         catch (Exception unavailable) { job.cancel(true); }
+        if(found.size()<required) throw new IOException("Could not create a relevant illustration for every content slide ("+found.size()+"/"+required+"). Configure FAL_KEY and retry.");
         return new HashMap<>(found);
     }
 

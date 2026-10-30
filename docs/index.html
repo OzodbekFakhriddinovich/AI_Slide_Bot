@@ -144,7 +144,7 @@
               <p class="error" id="topicError" hidden>Mavzuni kiriting.</p>
             </div>
             <div class="field"><label for="name" id="nameLabel">Ism, familiya <span aria-hidden="true">*</span></label><input type="text" id="name" minlength="3" maxlength="80" autocomplete="name" placeholder="Ism va familiyangizni kiriting" required aria-describedby="nameHint nameError"><p class="hint" id="nameHint">Muqova sahifasida ko‘rsatiladi.</p><p class="error" id="nameError" hidden>Ism va familiyangizni to‘liq kiriting.</p></div>
-            <div class="field"><span class="label" id="languageLabel">Bot tili</span><p class="hint" id="botLanguageValue" aria-live="polite"></p><input id="language" type="hidden" value=""></div>
+            <div class="field"><label for="language" id="languageLabel">Taqdimot tili <span aria-hidden="true">*</span></label><select id="language" required aria-describedby="languageError"><option value="">Tilni tanlang…</option><option value="UZ">O‘zbekcha</option><option value="RU">Русский</option><option value="ENG">English</option></select><p class="error" id="languageError" hidden>Slayd tilini tanlang.</p></div>
             <div class="field"><span class="label" id="countLabel">Slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel" tabindex="-1" aria-describedby="countError"></div><p class="error" id="countError" hidden>Slaydlar sonini tanlang.</p></div>
           </section>
           <section class="panel" aria-labelledby="designTitle">
@@ -252,14 +252,23 @@
       setText('heroDescription',c.hero); setText('previewNotice',c.previewMode);
       setText('contentTitle',c.about); setLabel('topicLabel',c.topic); $('topic').placeholder=c.topicPlaceholder; setText('topicHint',c.topicHint); setText('topicError',c.topicError);
       setLabel('nameLabel',c.name); $('name').placeholder=c.namePlaceholder; setText('nameHint',c.nameHint); setText('nameError',c.nameError);
-      setText('languageLabel',c.botLanguage); $('language').value=uiLocale; setText('botLanguageValue',languages[uiLocale]);
+      setLabel('languageLabel',c.language); populatePresentationLanguages();
       setText('countLabel',c.count); setText('countError',c.countError); setText('designTitle',c.design); $('autoTheme').querySelector('strong').textContent=c.auto; $('autoTheme').querySelector('small').textContent=c.autoHint;
       setText('themeBadge',uiLocale==='RU'?'24 стиля':uiLocale==='ENG'?'24 styles':'24 uslub'); setText('themeSearchLabel',c.searchStyle); $('themeSearch').placeholder=c.searchPlaceholder; $('themeFilters').setAttribute('aria-label',c.filterLabel); $('themeGrid').setAttribute('aria-label',uiLocale==='RU'?'Стили презентации':uiLocale==='ENG'?'Presentation styles':'Taqdimot uslublari'); setText('emptyThemes',c.emptyThemes); setText('previewNote',c.previewNote);
       setText('planTitle',c.research); setText('planHint',c.planHint); setText('previewLabel',c.firstPage); setText('previewDisclaimer',c.previewDisclaimer);
-      setText('orderTitle',c.order); setText('summaryCountLabel',c.summaryCount); setText('summaryLanguageLabel',c.botLanguage); setText('summaryThemeLabel',c.summaryTheme); setText('summaryPlanLabel',c.summaryPlan); setText('summaryFormatLabel',c.summaryFormat); setText('summaryFormat',c.pptx);
+      setText('orderTitle',c.order); setText('summaryCountLabel',c.summaryCount); setText('summaryLanguageLabel',c.language); setText('summaryThemeLabel',c.summaryTheme); setText('summaryPlanLabel',c.summaryPlan); setText('summaryFormatLabel',c.summaryFormat); setText('summaryFormat',c.pptx);
       setText('featureSources',c.sources); setText('featureImages',c.images); setText('featureCitations',c.citations); setText('totalLabel',c.total); setText('currencyLabel',c.currency); setText('footer',c.footer);
       setText('submitLabel',canSend?c.submit:c.previewOnly);
       $('deliveryNote').innerHTML=canSend?c.delivery:c.previewMode;
+    }
+
+    function populatePresentationLanguages() {
+      const options = uiLocale==='RU' ? [['','Выберите язык…'],['UZ','Узбекский'],['RU','Русский'],['ENG','Английский']]
+        : uiLocale==='ENG' ? [['','Choose a language…'],['UZ','Uzbek'],['RU','Russian'],['ENG','English']]
+        : [['','Tilni tanlang…'],['UZ','O‘zbekcha'],['RU','Русский'],['ENG','English']];
+      const selected=$('language').value;
+      $('language').innerHTML=options.map(([value,label])=>'<option value="'+value+'">'+label+'</option>').join('');
+      $('language').value=selected;
     }
 
     function normalized(value) { return value.toLocaleLowerCase().normalize('NFKD').replace(/[‘’ʻʼ'`]/g,'').replace(/[\u0300-\u036f]/g,''); }
@@ -309,7 +318,7 @@
       document.querySelectorAll('[data-count]').forEach(button => button.setAttribute('aria-pressed',String(state.slideCount != null && Number(button.dataset.count) === state.slideCount)));
       document.querySelectorAll('[data-tariff]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.tariff === state.tariff)));
     }
-    function clearError() { ['topic','name'].forEach(id => { $(id).removeAttribute('aria-invalid'); $(id+'Error').hidden = true; }); $('countError').hidden=true; $('countOptions').removeAttribute('aria-invalid'); $('globalNotice').hidden = true; }
+    function clearError() { ['topic','name'].forEach(id => { $(id).removeAttribute('aria-invalid'); $(id+'Error').hidden = true; }); $('language').removeAttribute('aria-invalid'); $('languageError').hidden=true; $('countError').hidden=true; $('countOptions').removeAttribute('aria-invalid'); $('globalNotice').hidden = true; }
     function changed() { clearError(); updatePreview(); }
     function showNotice(message,success) { $('globalNotice').textContent = message; $('globalNotice').className = 'notice '+(success ? 'success' : 'error-notice'); $('globalNotice').hidden = false; $('globalNotice').focus(); }
     function newRequestId() {
@@ -324,11 +333,12 @@
       clearError();
       const topic = $('topic').value.replace(/\s+/g,' ').trim();
       const name = $('name').value.replace(/\s+/g,' ').trim();
-      const language = uiLocale;
+      const language = $('language').value;
       const errors = [];
       if(topic.length < 3 || topic.length > 150 || /[\u0000-\u001f\u007f-\u009f]/.test(topic)) { $('topicError').textContent = copy().validTopic; errors.push('topic'); }
       if(name.length < 3 || name.length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || name.split(/\s+/).length < 2 || (name.match(/\p{L}/gu) || []).length < 3) { $('nameError').textContent = copy().validName; errors.push('name'); }
       if(!counts.includes(state.slideCount)) { $('countOptions').setAttribute('aria-invalid','true'); $('countError').hidden=false; errors.push('countOptions'); }
+      if(!['UZ','RU','ENG'].includes(language)) { $('language').setAttribute('aria-invalid','true'); $('languageError').hidden=false; errors.push('language'); }
       errors.forEach(id => { if(id==='countOptions') return; $(id).setAttribute('aria-invalid','true'); $(id+'Error').hidden = false; });
       if(errors.length) { const target=$(errors[0]); if(errors[0]==='countOptions') target.querySelector('button').focus(); else target.focus(); return; }
       if(!canSend) { showNotice(copy().previewOnly); return; }
@@ -358,10 +368,11 @@
     $('autoTheme').addEventListener('click',() => { state.template = 'auto'; renderThemes(); changed(); });
     $('themeFilters').addEventListener('click',event => { const button = event.target.closest('[data-filter]'); if(button) { state.filter = button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed',String(item.dataset.filter === state.filter))); renderThemes(); } });
     $('themeSearch').addEventListener('input',renderThemes);
+    $('language').addEventListener('change',changed);
     ['topic','name'].forEach(id => $(id).addEventListener('input',changed));
     $('presentationForm').addEventListener('submit',submitForm);
     function resetFormForReopen() {
-      $('presentationForm').reset(); $('topic').value=''; $('name').value=''; $('language').value=uiLocale; $('themeSearch').value='';
+      $('presentationForm').reset(); $('topic').value=''; $('name').value=''; $('language').value=''; $('themeSearch').value='';
       state.template='auto'; state.slideCount=null; state.tariff='5000'; state.filter='all'; state.pending=false; state.requestId=null; state.requestFingerprint=null;
       document.querySelectorAll('[data-filter]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.filter==='all')));
       resetSubmission(); clearError(); renderThemes(); updatePreview();

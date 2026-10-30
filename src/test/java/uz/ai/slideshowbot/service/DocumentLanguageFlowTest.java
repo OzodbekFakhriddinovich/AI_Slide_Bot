@@ -52,25 +52,59 @@ class DocumentLanguageFlowTest {
             if (!lang.equals("UZ"))
                 assertFalse(testAi.prompt.contains("Siz test generatori"), "Test prompt must not leak Uzbek into " + lang);
 
-            String referatText = switch (lang) {
-                case "RU" -> "# ВВЕДЕНИЕ\nВ работе рассматривается защита данных.\n# ГЛАВА I. Основы\n## 1.1. Шифрование\nШифрование защищает данные от чтения посторонними.\n# ЗАКЛЮЧЕНИЕ\nЗащита данных требует комплексных мер.\n# СПИСОК ЛИТЕРАТУРЫ\n1. Проверенный источник.";
-                case "ENG" -> "# INTRODUCTION\nThis paper examines data security.\n# CHAPTER I. Foundations\n## 1.1. Encryption\nEncryption protects data from unauthorized reading.\n# CONCLUSION\nData security requires layered controls.\n# REFERENCES\n1. A verified source.";
-                default -> "# KIRISH\nUshbu ish ma'lumotlar xavfsizligini o'rganadi.\n# I BOB. Asoslar\n## 1.1. Shifrlash\nShifrlash ma'lumotlarni ruxsatsiz o'qishdan himoya qiladi.\n# XULOSA\nMa'lumotlarni himoyalash bir necha chorani talab qiladi.\n# FOYDALANILGAN ADABIYOTLAR\n1. Tekshirilgan manba.";
-            };
+            String referatText = referatFixture(lang);
             FakeGemini referatAi = new FakeGemini(referatText);
             ReferatDocxService referatService = new ReferatDocxService();
             set(referatService, "gptService", referatAi);
             byte[] referatDoc = referatService.generate("Data security", "Alex Example", 15, lang);
             String actualReferat = documentText(referatDoc);
+            assertEquals(18, manualPageCount(referatDoc));
 
             assertTrue(actualReferat.contains("DATA SECURITY"));
             assertTrue(actualReferat.contains(switch (lang) { case "RU" -> "РЕФЕРАТ"; case "ENG" -> "ESSAY"; default -> "REFERAT"; }));
             assertTrue(actualReferat.contains(switch (lang) { case "RU" -> "ВВЕДЕНИЕ"; case "ENG" -> "INTRODUCTION"; default -> "KIRISH"; }));
             assertTrue(actualReferat.contains(switch (lang) { case "RU" -> "ПЛАН"; case "ENG" -> "OUTLINE"; default -> "REJA"; }));
             assertTrue(referatAi.prompt.contains(switch (lang) { case "RU" -> "RUSSIAN"; case "ENG" -> "ENGLISH"; default -> "UZBEK"; }));
+
+            if(lang.equals("ENG")) {
+                ReferatDocxService longReferatService=new ReferatDocxService();
+                FakeGemini longReferatAi=new FakeGemini(referatFixture(lang,4));
+                set(longReferatService,"gptService",longReferatAi);
+                byte[] twentyPageDoc=longReferatService.generate("Data security","Alex Example",20,lang);
+                assertEquals(23,manualPageCount(twentyPageDoc));
+            }
         }
     }
 
+    private static String referatFixture(String lang) {
+        return referatFixture(lang,3);
+    }
+
+    private static String referatFixture(String lang,int chapterCount) {
+        String sentence=switch(lang) {
+            case "RU" -> "\u0417\u0430\u0449\u0438\u0442\u0430 \u0434\u0430\u043d\u043d\u044b\u0445 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0430\u043d\u0430\u043b\u0438\u0437\u0430 \u0443\u0433\u0440\u043e\u0437, \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u0432, \u043e\u0431\u043e\u0441\u043d\u043e\u0432\u0430\u043d\u043d\u044b\u0445 \u043c\u0435\u0440 \u0438 \u0440\u0435\u0433\u0443\u043b\u044f\u0440\u043d\u043e\u0439 \u043e\u0446\u0435\u043d\u043a\u0438 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u0430.";
+            case "ENG" -> "Data security requires threat analysis, verified sources, justified controls, and regular evaluation of results.";
+            default -> "Axborot xavfsizligi tahdidlarni tahlil qilish, manbalarni tekshirish va natijalarni muntazam baholashni talab qiladi.";
+        };
+        StringBuilder out=new StringBuilder("# INTRODUCTION\n").append(repeat(sentence,45));
+        for(int chapter=1;chapter<=chapterCount;chapter++) {
+            out.append("\n# CHAPTER ").append(chapter).append(". Foundations and analysis\n");
+            for(int section=1;section<=3;section++)
+                out.append("\n## ").append(chapter).append(".").append(section).append(". Topic analysis\n").append(repeat(sentence,36));
+        }
+        out.append("\n# CONCLUSION\n").append(repeat(sentence,35)).append("\n# REFERENCES\n1. Verified academic source.\n2. International research publication.\n3. Official statistical report.");
+        return out.toString();
+    }
+    private static String repeat(String sentence,int count) { return String.join(" ",java.util.Collections.nCopies(count,sentence)); }
+
+    private static int manualPageCount(byte[] bytes) throws Exception {
+        try(XWPFDocument doc=new XWPFDocument(new ByteArrayInputStream(bytes))) {
+            long breaks=doc.getParagraphs().stream().flatMap(p->p.getRuns().stream())
+                    .flatMap(run->run.getCTR().getBrList().stream())
+                    .filter(br->br.getType()==org.openxmlformats.schemas.wordprocessingml.x2006.main.STBrType.PAGE).count();
+            return Math.toIntExact(breaks+1);
+        }
+    }
     private static String documentText(byte[] bytes) throws Exception {
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(bytes))) {
             StringBuilder text = new StringBuilder();
