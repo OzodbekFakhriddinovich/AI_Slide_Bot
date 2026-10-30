@@ -90,6 +90,22 @@ public class TelegramRawSender {
         }
     }
 
+    public void sendPptxFileWithShareBtn(SlideBot bot, String chatId, byte[] fileBytes,
+                                         String fileName, String caption,
+                                         String btnText, String btnUrl) throws Exception {
+        String markup = buildUrlMarkup(btnText, btnUrl, "success");
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("chat_id", chatId)
+                .addFormDataPart("caption", caption)
+                .addFormDataPart("parse_mode", "HTML")
+                .addFormDataPart("reply_markup", markup)
+                .addFormDataPart("document", fileName,
+                        RequestBody.create(fileBytes, MediaType.get("application/vnd.openxmlformats-officedocument.presentationml.presentation")))
+                .build();
+        post(bot, "sendDocument", requestBody);
+    }
+
     public void sendMessageWithStyledBtn(SlideBot bot, String chatId, String text, String btnText, String btnUrl, String btnStyle) {
         try {
             String markup = buildUrlMarkup(btnText, btnUrl, btnStyle);

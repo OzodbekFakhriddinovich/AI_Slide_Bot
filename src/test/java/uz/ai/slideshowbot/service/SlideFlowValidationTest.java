@@ -31,7 +31,7 @@ class SlideFlowValidationTest {
         assertTrue(message.getText().contains("1200"));
         assertTrue(message.getText().contains("3800"));
         var keyboard = (org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup)message.getReplyMarkup();
-        assertEquals("SLIDE_TOPUP_5000", keyboard.getKeyboard().get(0).get(0).getCallbackData());
+        assertEquals("BALANCE_PAY", keyboard.getKeyboard().get(0).get(0).getCallbackData());
     }
 
     @Test void toolbarFinishesOnlyAfterTheFileIsReady() {

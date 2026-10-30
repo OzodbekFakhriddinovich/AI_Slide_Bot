@@ -568,7 +568,13 @@ public class BotService {
                             case "ENG" -> "⚙️ Open presentation settings";
                             default    -> "⚙️ Taqdimot sozlamalarini kiritish";
                         });
-                        wb.setWebApp(new WebAppInfo(WEB_APP_URL));
+                        String uiLanguage = switch (user.getLanguage() == null ? "UZ" : user.getLanguage()) {
+                            case "RU" -> "RU";
+                            case "ENG" -> "ENG";
+                            default -> "UZ";
+                        };
+                        String separator = WEB_APP_URL.contains("?") ? "&" : "?";
+                        wb.setWebApp(new WebAppInfo(WEB_APP_URL + separator + "ui=" + uiLanguage + "&v=2"));
                         KeyboardRow wr = new KeyboardRow(); wr.add(wb);
                         ReplyKeyboardMarkup wm = new ReplyKeyboardMarkup(List.of(wr)); wm.setResizeKeyboard(true);
                         SendMessage wMsg = new SendMessage(chatId.toString(), switch (user.getLanguage()) {

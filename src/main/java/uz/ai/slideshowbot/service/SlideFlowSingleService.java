@@ -5,7 +5,6 @@ import jakarta.annotation.PreDestroy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
-import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -31,6 +30,7 @@ public class SlideFlowSingleService {
     private final SlideOrderService orders;
     private final SlidePlanningService planner;
     private final PptxCreatorService pptx;
+    private final TelegramRawSender rawSender;
     private final ObjectMapper json = new ObjectMapper();
     private final ScheduledExecutorService progressClock = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "slide-progress-clock"); thread.setDaemon(true); return thread;
@@ -43,10 +43,11 @@ public class SlideFlowSingleService {
             }, new ThreadPoolExecutor.AbortPolicy());
 
     public SlideFlowSingleService(SlideOrderService orders, SlidePlanningService planner,
-                                  PptxCreatorService pptx, SlideExportService exporter) {
+                                  PptxCreatorService pptx, SlideExportService exporter, TelegramRawSender rawSender) {
         this.orders = orders;
         this.planner = planner;
         this.pptx = pptx;
+        this.rawSender = rawSender;
     }
 
     public void handleWebAppData(UserEntity user, Message message, SlideBot bot) {
@@ -88,8 +89,10 @@ public class SlideFlowSingleService {
                 send(bot, chatId, "Navbat band. Mablag' qaytarildi. Birozdan so'ng qayta urinib ko'ring.");
             }
         } catch (SlideOrderService.InsufficientBalanceException e) {
-            try { bot.execute(insufficientBalanceMessage(chatId, language, e.balance(), e.required())); }
-            catch (Exception ignored) {}
+            SendMessage insufficient = insufficientBalanceMessage(chatId, language, e.balance(), e.required());
+            rawSender.sendMessageWithStyledCallbackBtn(bot, chatId.toString(), insufficient.getText(),
+                    localized(language, "💳 Balansni to'ldirish", "💳 Пополнить баланс", "💳 Top up balance"),
+                    "BALANCE_PAY", "success");
         } catch (IllegalArgumentException e) {
             send(bot, chatId, e.getMessage());
         } catch (Exception e) {
@@ -122,14 +125,20 @@ public class SlideFlowSingleService {
             Path result = pptxFile;
             if (!orders.touch(order.getId())) return;
             progress.ready();
-            SendDocument document = new SendDocument();
-            document.setChatId(chatId.toString());
-            document.setDocument(new InputFile(result.toFile()));
-            document.setCaption(localized(language,
-                    "📕 Sizning taqdimotingiz tayyor!\n\n📌 Mavzu: " + request.topic() + "\n" + request.slideCount() + " asosiy + 3 bonus = " + deck.slides().size() + " slayd\n\nTaqdimot tayyorlovchi bot: @AI_Slide_Assistant_Bot",
-                    "Презентация готова!\n\n" + request.topic() + "\nСлайдов: " + deck.slides().size() + "\nИсточники текста и изображений указаны в файле.",
-                    "Your presentation is ready!\n\n" + request.topic() + "\n" + deck.slides().size() + " slides\nText and image sources are included in the file."));
-            bot.execute(document);
+            String caption = localized(language,
+                    "📕 <b>Taqdimotingiz tayyor!</b>\n\n📌 Mavzu: <b>" + html(request.topic()) + "</b>\n✍️ Bajardi: " + html(request.name()) + "\n\nFaylni yuklab olish uchun bosing.",
+                    "📕 <b>Презентация готова!</b>\n\n📌 Тема: <b>" + html(request.topic()) + "</b>\n✍️ Автор: " + html(request.name()) + "\n\nНажмите на файл, чтобы скачать его.",
+                    "📕 <b>Your presentation is ready!</b>\n\n📌 Topic: <b>" + html(request.topic()) + "</b>\n✍️ Author: " + html(request.name()) + "\n\nTap the file to download it.");
+            String shareText = localized(language,
+                    "Taqdimot: " + request.topic() + " — @AI_Slide_Assistant_Bot",
+                    "Презентация: " + request.topic() + " — @AI_Slide_Assistant_Bot",
+                    "Presentation: " + request.topic() + " — @AI_Slide_Assistant_Bot");
+            String shareUrl = "https://t.me/share/url?url=" + java.net.URLEncoder.encode(
+                    "https://t.me/AI_Slide_Assistant_Bot", java.nio.charset.StandardCharsets.UTF_8)
+                    + "&text=" + java.net.URLEncoder.encode(shareText, java.nio.charset.StandardCharsets.UTF_8);
+            String shareButton = localized(language, "📤 Ulashish", "📤 Поделиться", "📤 Share");
+            rawSender.sendPptxFileWithShareBtn(bot, chatId.toString(), Files.readAllBytes(result),
+                    result.getFileName().toString(), caption, shareButton, shareUrl);
             delivered = true;
             orders.complete(order.getId());
         } catch (Exception e) {
@@ -191,9 +200,13 @@ public class SlideFlowSingleService {
                 "❌ Insufficient balance.\nAvailable: " + balance + " UZS\nPrice: " + required + " UZS\nMissing: " + missing + " UZS"));
         InlineKeyboardButton button = InlineKeyboardButton.builder()
                 .text(localized(language, "💳 Balansni to'ldirish", "💳 Пополнить баланс", "💳 Top up balance"))
-                .callbackData("SLIDE_TOPUP_" + required).build();
+                .callbackData("BALANCE_PAY").build();
         message.setReplyMarkup(new InlineKeyboardMarkup(List.of(List.of(button))));
         return message;
+    }
+
+    private static String html(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     static String progressText(String language, long elapsedSeconds, boolean ready, String stage) {

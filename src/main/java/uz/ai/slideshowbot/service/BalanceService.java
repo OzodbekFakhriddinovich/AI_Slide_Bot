@@ -109,21 +109,21 @@ public class BalanceService {
             case "RU" -> "💰 <b>Ваш баланс:</b> " + user.getBalance() + " сум\n\n" +
                     "📕 <b>Цены:</b>\n" +
                     "• Презентация — тарифы 5 000 / 7 000 сум\n" +
-                    "• 10 / 15 / 20 основных слайдов + 3 бонусных, PPTX\n" +
+                    "• 10 / 15 / 20 слайдов, PPTX\n" +
                     "• Тест — 5 000 сум\n" +
                     "• Реферат — 5 000 сум\n\n" +
                     "👇 Выберите сумму пополнения:";
             case "ENG" -> "💰 <b>Your balance:</b> " + user.getBalance() + " UZS\n\n" +
                     "📕 <b>Prices:</b>\n" +
                     "• Presentation — plans 5 000 / 7 000 UZS\n" +
-                    "• 10 / 15 / 20 content slides + 3 bonus pages, PPTX\n" +
+                    "• 10 / 15 / 20 slides, PPTX\n" +
                     "• Test — 5 000 UZS\n" +
                     "• Essay — 5 000 UZS\n\n" +
                     "👇 Select top-up amount:";
             default -> "💰 <b>Balansingiz:</b> " + user.getBalance() + " so'm\n\n" +
                     "📕 <b>Narxlar:</b>\n" +
                     "• Taqdimot — tariflar 5 000 / 7 000 so'm\n" +
-                    "• 10 / 15 / 20 asosiy slayd + 3 bonus sahifa, PPTX\n" +
+                    "• 10 / 15 / 20 slayd, PPTX\n" +
                     "• Test — 5 000 so'm\n" +
                     "• Referat — 5 000 so'm\n\n" +
                     "👇 To'ldirish summasini tanlang:";

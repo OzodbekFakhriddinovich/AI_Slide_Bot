@@ -70,12 +70,13 @@
     .filter { white-space:nowrap; color:var(--muted); border:1px solid transparent; background:transparent; padding:5px 10px; border-radius:7px; font-size:11px; }
     .filter[aria-pressed=true] { color:#d4edf3; background:#22394b; border-color:#345268; }
     .theme-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; }
-    .theme-card { padding:0; text-align:left; border:1px solid #2b3c54; border-radius:10px; background:#0c1727; color:#bdcce0; overflow:hidden; position:relative; transition:border-color .16s,transform .16s; }
+    .theme-card { padding:0; text-align:left; border:1px solid #2b3c54; border-radius:10px; background:#0c1727; color:#bdcce0; overflow:hidden; position:relative; transition:border-color .16s,transform .16s; min-width:0; }
     .theme-card:hover { border-color:#648298; transform:translateY(-1px); }
     .theme-card[aria-pressed=true] { border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan); }
     .theme-card .selection-mark { position:absolute; right:7px; top:7px; width:15px; height:15px; font-size:9px; background:#091728a6; }
     .theme-card[aria-pressed=true] .selection-mark { background:var(--cyan); border-color:var(--cyan); color:#082332; }
-    .mini-slide { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--theme-bg); }
+    .mini-slide-frame { position:relative; display:block; width:100%; aspect-ratio:16/9; overflow:hidden; background:var(--theme-bg); }
+    .mini-slide { display:block; position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .theme-caption { display:flex; gap:4px; align-items:center; justify-content:space-between; padding:8px; font-size:10px; font-weight:600; }
     .theme-index { color:#6c829e; font-size:9px; }
     .empty { margin:12px 0; color:var(--muted); font-size:12px; }
@@ -121,13 +122,13 @@
   <div class="shell">
     <header class="topbar">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H4zM8 20l4-4 4 4M8 9h8M8 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>SlideBot<span style="color:var(--cyan)">.</span></div>
-      <span class="top-meta">Taqdimot studiyasi</span>
+      <span class="top-meta" id="topMeta">Taqdimot studiyasi</span>
     </header>
     <section class="hero" aria-labelledby="pageTitle">
       <div class="hero-art" aria-hidden="true"></div>
-      <p class="eyebrow">G‘oyadan taqdimotgacha</p>
+      <p class="eyebrow" id="eyebrow">G‘oyadan taqdimotgacha</p>
       <h1 id="pageTitle">Mavzu sizdan.<br>Taqdimot bizdan.</h1>
-      <p>Mavzuni yozing, uslubni tanlang. Internet manbalari va haqiqiy rasmlar bilan taqdimotingizni tayyorlaymiz.</p>
+      <p id="heroDescription">Mavzuni yozing, uslubni tanlang. Internet manbalari va haqiqiy rasmlar bilan taqdimotingizni tayyorlaymiz.</p>
     </section>
     <div id="previewNotice" class="notice" hidden>Ko‘rib chiqish rejimi. Buyurtma yuborish uchun ushbu sahifani Telegram botdagi «Taqdimot sozlamalari» tugmasidan oching.</div>
     <div id="globalNotice" class="notice error-notice" role="alert" tabindex="-1" hidden></div>
@@ -137,52 +138,52 @@
           <section class="panel" aria-labelledby="contentTitle">
             <div class="panel-head"><span class="step" aria-hidden="true">01</span><h2 id="contentTitle">Taqdimot haqida</h2></div>
             <div class="field">
-              <div class="label-row"><label for="topic">Mavzu <span aria-hidden="true">*</span></label><span class="counter" id="topicCounter">0 / 150</span></div>
+              <div class="label-row"><label for="topic" id="topicLabel">Mavzu <span aria-hidden="true">*</span></label><span class="counter" id="topicCounter">0 / 150</span></div>
               <textarea id="topic" maxlength="150" required placeholder="Masalan: Tarmoq xavfsizligi va kiberhujumlardan himoyalanish" aria-describedby="topicHint topicError"></textarea>
               <p class="hint" id="topicHint">Fan nomi va asosiy yo‘nalishni qo‘shsangiz, mazmun aniqroq bo‘ladi.</p>
               <p class="error" id="topicError" hidden>Mavzuni kiriting.</p>
             </div>
-            <div class="field"><label for="name">Ism, familiya <span aria-hidden="true">*</span></label><input type="text" id="name" minlength="3" maxlength="80" autocomplete="name" placeholder="Ism va familiyangizni kiriting" required aria-describedby="nameHint nameError"><p class="hint" id="nameHint">Muqova sahifasida ko‘rsatiladi.</p><p class="error" id="nameError" hidden>Ism va familiyangizni to‘liq kiriting.</p></div>
-            <div class="field"><label for="language">Taqdimot tili <span aria-hidden="true">*</span></label><select id="language" required aria-describedby="languageError"><option value="" disabled selected>Tilni tanlang…</option><option value="UZ">O‘zbekcha</option><option value="ENG">English</option><option value="RU">Русский</option><option value="ES">Español</option><option value="DE">Deutsch</option><option value="TOJ">Тоҷикӣ</option><option value="TUR">Türkçe</option></select><p class="error" id="languageError" hidden>Taqdimot tilini tanlang.</p></div>
-            <div class="field"><span class="label" id="countLabel">Asosiy slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel"></div><p class="hint">Tanlangan songa muqova, reja va yakun sahifasi bonus sifatida qo‘shiladi. Masalan: 10 + 3 = jami 13 slayd.</p></div>
+            <div class="field"><label for="name" id="nameLabel">Ism, familiya <span aria-hidden="true">*</span></label><input type="text" id="name" minlength="3" maxlength="80" autocomplete="name" placeholder="Ism va familiyangizni kiriting" required aria-describedby="nameHint nameError"><p class="hint" id="nameHint">Muqova sahifasida ko‘rsatiladi.</p><p class="error" id="nameError" hidden>Ism va familiyangizni to‘liq kiriting.</p></div>
+            <div class="field"><label for="language" id="languageLabel">Taqdimot tili <span aria-hidden="true">*</span></label><select id="language" required aria-describedby="languageError"><option value="" disabled selected>Tilni tanlang…</option><option value="UZ">O‘zbekcha</option><option value="ENG">English</option><option value="RU">Русский</option><option value="ES">Español</option><option value="DE">Deutsch</option><option value="TOJ">Тоҷикӣ</option><option value="TUR">Türkçe</option></select><p class="error" id="languageError" hidden>Taqdimot tilini tanlang.</p></div>
+            <div class="field"><span class="label" id="countLabel">Slaydlar soni</span><div class="count-options" id="countOptions" role="group" aria-labelledby="countLabel" tabindex="-1" aria-describedby="countError"></div><p class="error" id="countError" hidden>Slaydlar sonini tanlang.</p></div>
           </section>
           <section class="panel" aria-labelledby="designTitle">
-            <div class="theme-head"><div class="panel-head"><span class="step" aria-hidden="true">02</span><h2 id="designTitle">Dizayn uslubi</h2></div><span class="badge">24 uslub</span></div>
+            <div class="theme-head"><div class="panel-head"><span class="step" aria-hidden="true">02</span><h2 id="designTitle">Dizayn uslubi</h2></div><span class="badge" id="themeBadge">24 uslub</span></div>
             <button type="button" class="auto-card" id="autoTheme" aria-pressed="true"><span class="auto-icon" aria-hidden="true">✧</span><span class="auto-text"><strong>Mavzuga mos tanlash</strong><small>Rang va uslubni mavzuga qarab tavsiya qilamiz</small></span><span class="selection-mark" aria-hidden="true">✓</span></button>
-            <label for="themeSearch" class="optional">Uslub qidirish</label><input type="search" class="theme-search" id="themeSearch" placeholder="Masalan: Ocean, tarix, tibbiyot…" autocomplete="off">
+            <label for="themeSearch" class="optional" id="themeSearchLabel">Uslub qidirish</label><input type="search" class="theme-search" id="themeSearch" placeholder="Masalan: Ocean, tarix, tibbiyot…" autocomplete="off">
             <div class="filters" id="themeFilters" role="group" aria-label="Uslub yo‘nalishi"></div>
             <div class="theme-grid" id="themeGrid" role="group" aria-label="Taqdimot uslublari"></div>
             <p id="emptyThemes" class="empty" role="status" hidden>Bu qidiruvga mos uslub topilmadi. Boshqa so‘z yozib ko‘ring.</p>
-            <p class="preview-note">Kartalarda taqdimotning haqiqiy birinchi sahifa namunasi ko‘rsatilgan. Mavzu va ism siz kiritgan ma’lumotlarga almashtiriladi.</p>
+            <p class="preview-note" id="previewNote">Kartalarda taqdimotning haqiqiy birinchi sahifa namunasi ko‘rsatilgan.</p>
           </section>
           <section class="panel" aria-labelledby="planTitle">
             <div class="panel-head"><span class="step" aria-hidden="true">03</span><h2 id="planTitle">Tadqiqot hajmi</h2></div>
             <div class="plan-options" id="planOptions" role="group" aria-label="Taqdimot tarifi"></div>
-            <p class="hint">Barcha tariflarda internet manbalari va mavzuga mos rasmlar ishlatiladi.</p>
+            <p class="hint" id="planHint">Barcha tariflarda internet manbalari va mavzuga mos rasmlar ishlatiladi.</p>
           </section>
         </div>
         <aside class="preview-column" aria-label="Buyurtma tafsilotlari">
           <div class="preview-visual">
-            <div class="preview-label"><span><span class="live-dot"></span>Birinchi sahifa</span><span>16 : 9</span></div>
+            <div class="preview-label"><span><span class="live-dot"></span><span id="previewLabel">Birinchi sahifa</span></span><span>16 : 9</span></div>
             <div class="deck-preview" id="deckPreview"><img id="deckPreviewImage" src="theme-previews/1.jpg" alt="Cyber Navy — birinchi slayd namunasi" width="960" height="540"></div>
-            <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer">Mavzu va muallif ismi namunada ko‘rsatilgan.</p>
+            <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer" id="previewDisclaimer">Mavzu va muallif ismi namunada ko‘rsatilgan.</p>
           </div>
           <div class="order-box">
-            <p class="order-title">Taqdimotingiz</p>
-            <div class="summary-line"><span>Asosiy slaydlar</span><span id="summaryDetails">10 + 3 bonus = 13 slayd</span></div>
-            <div class="summary-line"><span>Taqdimot tili</span><span id="summaryLanguage">Tanlanmagan</span></div>
-            <div class="summary-line"><span>Uslub</span><span id="summaryTheme">Mavzuga mos</span></div>
-            <div class="summary-line"><span>Tadqiqot</span><span id="summaryPlan">Batafsil</span></div>
-            <div class="summary-line"><span>Natija</span><span id="summaryFormat">PowerPoint (.pptx)</span></div>
-            <ul class="features"><li>Internet manbalari asosidagi mazmun</li><li>Mavzuga mos haqiqiy rasmlar</li><li>Manbalar va havolalar bilan</li></ul>
-            <div class="total"><span>Jami narx</span><strong><span id="totalPrice" style="font:inherit;color:inherit">5 000</span> <small>so‘m</small></strong></div>
+            <p class="order-title" id="orderTitle">Taqdimotingiz</p>
+            <div class="summary-line"><span id="summaryCountLabel">Slaydlar soni</span><span id="summaryDetails">Tanlang</span></div>
+            <div class="summary-line"><span id="summaryLanguageLabel">Taqdimot tili</span><span id="summaryLanguage">Tanlanmagan</span></div>
+            <div class="summary-line"><span id="summaryThemeLabel">Uslub</span><span id="summaryTheme">Mavzuga mos</span></div>
+            <div class="summary-line"><span id="summaryPlanLabel">Tadqiqot</span><span id="summaryPlan">Batafsil</span></div>
+            <div class="summary-line"><span id="summaryFormatLabel">Natija</span><span id="summaryFormat">PowerPoint (.pptx)</span></div>
+            <ul class="features"><li id="featureSources">Internet manbalari asosidagi mazmun</li><li id="featureImages">Mavzuga mos haqiqiy rasmlar</li><li id="featureCitations">Manbalar va havolalar bilan</li></ul>
+            <div class="total"><span id="totalLabel">Jami narx</span><strong><span id="totalPrice" style="font:inherit;color:inherit">5 000</span> <small id="currencyLabel">so‘m</small></strong></div>
             <button class="submit" id="submitBtn" type="submit"><span id="submitLabel">Taqdimot yaratish</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <p class="delivery-note" id="deliveryNote">Narx bot balansingizdan yechiladi.<br>Tayyor fayl Telegram chatga yuboriladi.</p>
           </div>
         </aside>
       </div>
     </form>
-    <footer class="footer">SlideBot · O‘qish, izlanish va yangi g‘oyalar uchun.</footer>
+    <footer class="footer" id="footer">SlideBot · O‘qish, izlanish va yangi g‘oyalar uchun.</footer>
   </div>
   <script>
     'use strict';
@@ -213,19 +214,45 @@
       {id:'23',name:'Lavender',group:'creative',tags:'psixologiya falsafa och binafsha',bg:'#f0eafb',accent:'#8b64ba',fg:'#403353'},
       {id:'24',name:'Monochrome',group:'minimal',tags:'qora oq minimal rasmiy',bg:'#17191d',accent:'#f5f5f5',fg:'#f2f4f5'}
     ];
-    const filters = [{id:'all',name:'Barchasi'},{id:'tech',name:'Texnologiya'},{id:'education',name:'Ta’lim'},{id:'business',name:'Biznes'},{id:'science',name:'Ilm-fan'},{id:'nature',name:'Tabiat'},{id:'creative',name:'Ijod'},{id:'minimal',name:'Minimal'}];
+    const filters = ['all','tech','education','business','science','nature','creative','minimal'].map(id => ({id}));
     const languages = {UZ:'O‘zbekcha',ENG:'English',RU:'Русский',ES:'Español',DE:'Deutsch',TOJ:'Тоҷикӣ',TUR:'Türkçe'};
+    const uiParam = new URLSearchParams(window.location.search).get('ui');
+    const uiLocale = uiParam === 'RU' || uiParam === 'ENG' ? uiParam : 'UZ';
+    const uiCopy = {
+      UZ:{meta:'Taqdimot studiyasi',eyebrow:'G‘oyadan taqdimotgacha',hero:'Mavzuni yozing, uslubni tanlang. Internet manbalari va mavzuga mos rasmlar bilan taqdimotingizni tayyorlaymiz.',previewMode:'Ko‘rib chiqish rejimi. Buyurtma yuborish uchun sahifani Telegram botdagi sozlamalar tugmasidan oching.',about:'Taqdimot haqida',topic:'Mavzu',topicPlaceholder:'Mavzuni kiriting',topicHint:'Fan nomi va asosiy yo‘nalishni qo‘shsangiz, mazmun aniqroq bo‘ladi.',topicError:'Mavzuni kiriting.',name:'Ism, familiya',namePlaceholder:'Ism va familiyangizni kiriting',nameHint:'Muqova sahifasida ko‘rsatiladi.',nameError:'Ism va familiyangizni to‘liq kiriting.',language:'Taqdimot tili',chooseLanguage:'Tilni tanlang…',languageError:'Taqdimot tilini tanlang.',count:'Slaydlar soni',countError:'Slaydlar sonini tanlang.',choose:'Tanlang',design:'Dizayn uslubi',auto:'Mavzuga mos tanlash',autoHint:'Rang va uslubni mavzuga qarab tavsiya qilamiz',searchStyle:'Uslub qidirish',searchPlaceholder:'Masalan: Ocean, tarix, tibbiyot…',filterLabel:'Uslub yo‘nalishi',emptyThemes:'Bu qidiruvga mos uslub topilmadi. Boshqa so‘z yozib ko‘ring.',previewNote:'Har bir kartada taqdimotning birinchi sahifasi ko‘rsatilgan.',research:'Tadqiqot hajmi',planHint:'Barcha tariflarda internet manbalari va mavzuga mos rasmlar ishlatiladi.',firstPage:'Birinchi sahifa',previewDisclaimer:'Muqovada mavzu va ism-familiya bo‘ladi.',order:'Taqdimotingiz',summaryCount:'Slaydlar soni',summaryLanguage:'Taqdimot tili',summaryTheme:'Uslub',summaryPlan:'Tadqiqot',summaryFormat:'Natija',pptx:'PowerPoint (.pptx)',sources:'Internet manbalari asosidagi mazmun',images:'Mavzuga mos rasmlar',citations:'Manbalar va havolalar bilan',total:'Jami narx',currency:'so‘m',submit:'Taqdimot yaratish',delivery:'Narx bot balansingizdan yechiladi.<br>Tayyor fayl Telegram chatga yuboriladi.',footer:'SlideBot · O‘qish, izlanish va yangi g‘oyalar uchun.',selected:'Tanlangan',formatHint:'PPTX fayl',planNames:{5000:['Batafsil','Muhim jihatlar va ishonchli manbalar'],7000:['Keng tadqiqot','Ko‘proq manba va batafsil qamrov']},filters:{all:'Barchasi',tech:'Texnologiya',education:'Ta’lim',business:'Biznes',science:'Ilm-fan',nature:'Tabiat',creative:'Ijod',minimal:'Minimal'},validTopic:'Mavzu 3–150 belgidan iborat bo‘lsin.',validName:'Ism va familiyangizni to‘liq kiriting (3–80 belgi).',previewOnly:'Buyurtma yuborish uchun sahifani Telegram bot ichidan oching.',large:'Ma’lumot hajmi katta. Mavzu yoki ismni qisqartiring.',sending:'Botga yuborilmoqda…',sent:'Yuborish so‘rovi berildi. Natijani bot chatida tekshiring.',failed:'Buyurtma yuborilmadi. Telegram ulanishini tekshirib, yana urinib ko‘ring.',topup:'Balansni to‘ldirish'},
+      RU:{meta:'Студия презентаций',eyebrow:'ОТ ИДЕИ ДО ПРЕЗЕНТАЦИИ',hero:'Введите тему и выберите стиль. Подготовим презентацию по интернет-источникам с подходящими изображениями.',previewMode:'Предпросмотр. Чтобы оформить заказ, откройте настройки презентации в Telegram-боте.',about:'О презентации',topic:'Тема',topicPlaceholder:'Введите тему',topicHint:'Добавьте предмет и основное направление, чтобы материал был точнее.',topicError:'Введите тему.',name:'Имя и фамилия',namePlaceholder:'Введите имя и фамилию',nameHint:'Будут указаны на титульном слайде.',nameError:'Введите имя и фамилию полностью.',language:'Язык презентации',chooseLanguage:'Выберите язык…',languageError:'Выберите язык презентации.',count:'Количество слайдов',countError:'Выберите количество слайдов.',choose:'Выберите',design:'Дизайн презентации',auto:'Подобрать по теме',autoHint:'Подберём цвет и стиль по теме',searchStyle:'Поиск стиля',searchPlaceholder:'Например: океан, история, медицина…',filterLabel:'Категории стилей',emptyThemes:'Стиль не найден. Попробуйте другой запрос.',previewNote:'На каждой карточке показана титульная страница презентации.',research:'Глубина исследования',planHint:'В каждом тарифе используются интернет-источники и подходящие изображения.',firstPage:'Титульный слайд',previewDisclaimer:'На титульном слайде будут тема и имя автора.',order:'Ваша презентация',summaryCount:'Количество слайдов',summaryLanguage:'Язык',summaryTheme:'Стиль',summaryPlan:'Исследование',summaryFormat:'Формат',pptx:'PowerPoint (.pptx)',sources:'Материалы по интернет-источникам',images:'Изображения по теме',citations:'Источники и ссылки',total:'Итого',currency:'сум',submit:'Создать презентацию',delivery:'Стоимость спишется с баланса бота.<br>Готовый файл придёт в чат Telegram.',footer:'SlideBot · Учёба, исследования и новые идеи.',selected:'Выбрано',formatHint:'Файл PPTX',planNames:{5000:['Подробно','Основные сведения и надёжные источники'],7000:['Расширенное исследование','Больше источников и подробный охват']},filters:{all:'Все',tech:'Технологии',education:'Образование',business:'Бизнес',science:'Наука',nature:'Природа',creative:'Творчество',minimal:'Минимализм'},validTopic:'Тема должна содержать от 3 до 150 символов.',validName:'Укажите имя и фамилию полностью (3–80 символов).',previewOnly:'Откройте страницу внутри Telegram-бота, чтобы отправить заказ.',large:'Слишком много данных. Сократите тему или имя.',sending:'Отправляем боту…',sent:'Запрос отправлен. Проверьте чат с ботом.',failed:'Не удалось отправить заказ. Проверьте Telegram и попробуйте ещё раз.',topup:'Пополнить баланс'},
+      ENG:{meta:'Presentation studio',eyebrow:'FROM IDEA TO PRESENTATION',hero:'Enter a topic and choose a style. We’ll prepare a presentation using web sources and relevant images.',previewMode:'Preview mode. Open presentation settings inside the Telegram bot to place an order.',about:'About the presentation',topic:'Topic',topicPlaceholder:'Enter a topic',topicHint:'Add a subject and focus area for more precise content.',topicError:'Enter a topic.',name:'First and last name',namePlaceholder:'Enter your full name',nameHint:'Shown on the cover slide.',nameError:'Enter your first and last name.',language:'Presentation language',chooseLanguage:'Choose a language…',languageError:'Choose the presentation language.',count:'Number of slides',countError:'Choose the number of slides.',choose:'Choose',design:'Presentation design',auto:'Match the topic',autoHint:'We’ll recommend a color and style for your topic',searchStyle:'Search styles',searchPlaceholder:'For example: ocean, history, medicine…',filterLabel:'Style categories',emptyThemes:'No matching style. Try another search.',previewNote:'Each card shows a presentation cover page.',research:'Research depth',planHint:'Every plan uses web sources and relevant images.',firstPage:'Cover slide',previewDisclaimer:'The cover shows the topic and author name.',order:'Your presentation',summaryCount:'Slides',summaryLanguage:'Language',summaryTheme:'Style',summaryPlan:'Research',summaryFormat:'Format',pptx:'PowerPoint (.pptx)',sources:'Content from web sources',images:'Images matched to your topic',citations:'Sources and links included',total:'Total price',currency:'UZS',submit:'Create presentation',delivery:'The price will be deducted from your bot balance.<br>The finished file will be sent to your Telegram chat.',footer:'SlideBot · Learning, research and new ideas.',selected:'Selected',formatHint:'PPTX file',planNames:{5000:['Detailed','Key facts and reliable sources'],7000:['Extended research','More sources and broader coverage']},filters:{all:'All',tech:'Technology',education:'Education',business:'Business',science:'Science',nature:'Nature',creative:'Creative',minimal:'Minimal'},validTopic:'Topic must be 3–150 characters.',validName:'Enter your first and last name (3–80 characters).',previewOnly:'Open this page inside the Telegram bot to place an order.',large:'Too much data. Shorten the topic or name.',sending:'Sending to bot…',sent:'Request sent. Check your bot chat.',failed:'Could not send the order. Check Telegram and try again.',topup:'Top up balance'}
+    };
     const counts = [10,15,20];
     const plans = {5000:{name:'Batafsil',detail:'Internet manbalari va mavzuning muhim jihatlari'},7000:{name:'Keng tadqiqot',detail:'Manba qidiruviga ko‘proq vaqt va kengroq qamrov'}};
-    const DRAFT_KEY = 'slidebot.presentation.v3';
     const $ = id => document.getElementById(id);
-    const state = {template:'auto',slideCount:10,tariff:'5000',filter:'all',pending:false,requestId:null,requestFingerprint:null};
+    const state = {template:'auto',slideCount:null,tariff:'5000',filter:'all',pending:false,requestId:null,requestFingerprint:null};
     let tg = null;
     try { tg = window.Telegram && window.Telegram.WebApp; if(tg) { tg.ready(); tg.expand(); if(tg.setHeaderColor) tg.setHeaderColor('#080f1d'); if(tg.setBackgroundColor) tg.setBackgroundColor('#080f1d'); } } catch(error) { tg = null; }
     // Keyboard-button Mini Apps can have empty initData; the Telegram platform still identifies the WebView.
     const canSend = Boolean(tg && typeof tg.sendData === 'function' && (tg.initData || (tg.platform && tg.platform !== 'unknown')));
     $('previewNotice').hidden = canSend;
     if(!canSend) { $('submitLabel').textContent = 'Telegram orqali yarating'; $('deliveryNote').textContent = 'Bu sahifa hozir ko‘rib chiqish rejimida.'; }
+    function copy() { return uiCopy[uiLocale]; }
+    function setText(id,text) { const el=$(id); if(el) el.textContent=text; }
+    function setLabel(id,text) { const el=$(id); if(el && el.firstChild) el.firstChild.textContent=text+' '; }
+    function applyUiLanguage() {
+      const c=copy();
+      document.documentElement.lang=uiLocale.toLowerCase();
+      document.title='SlideBot — '+c.meta;
+      setText('topMeta',c.meta); setText('eyebrow',c.eyebrow); $('pageTitle').innerHTML=uiLocale==='UZ'?'Mavzu sizdan.<br>Taqdimot bizdan.':uiLocale==='RU'?'Тема от вас.<br>Презентация от нас.':'Your topic.<br>Our presentation.';
+      setText('heroDescription',c.hero); setText('previewNotice',c.previewMode);
+      setText('contentTitle',c.about); setLabel('topicLabel',c.topic); $('topic').placeholder=c.topicPlaceholder; setText('topicHint',c.topicHint); setText('topicError',c.topicError);
+      setLabel('nameLabel',c.name); $('name').placeholder=c.namePlaceholder; setText('nameHint',c.nameHint); setText('nameError',c.nameError);
+      setLabel('languageLabel',c.language); $('language').options[0].textContent=c.chooseLanguage; setText('languageError',c.languageError);
+      setText('countLabel',c.count); setText('countError',c.countError); setText('designTitle',c.design); $('autoTheme').querySelector('strong').textContent=c.auto; $('autoTheme').querySelector('small').textContent=c.autoHint;
+      setText('themeBadge',uiLocale==='RU'?'24 стиля':uiLocale==='ENG'?'24 styles':'24 uslub'); setText('themeSearchLabel',c.searchStyle); $('themeSearch').placeholder=c.searchPlaceholder; $('themeFilters').setAttribute('aria-label',c.filterLabel); $('themeGrid').setAttribute('aria-label',uiLocale==='RU'?'Стили презентации':uiLocale==='ENG'?'Presentation styles':'Taqdimot uslublari'); setText('emptyThemes',c.emptyThemes); setText('previewNote',c.previewNote);
+      setText('planTitle',c.research); setText('planHint',c.planHint); setText('previewLabel',c.firstPage); setText('previewDisclaimer',c.previewDisclaimer);
+      setText('orderTitle',c.order); setText('summaryCountLabel',c.summaryCount); setText('summaryLanguageLabel',c.summaryLanguage); setText('summaryThemeLabel',c.summaryTheme); setText('summaryPlanLabel',c.summaryPlan); setText('summaryFormatLabel',c.summaryFormat); setText('summaryFormat',c.pptx);
+      setText('featureSources',c.sources); setText('featureImages',c.images); setText('featureCitations',c.citations); setText('totalLabel',c.total); setText('currencyLabel',c.currency); setText('footer',c.footer);
+      setText('submitLabel',canSend?c.submit:c.previewOnly);
+      $('deliveryNote').innerHTML=canSend?c.delivery:c.previewMode;
+    }
 
     function normalized(value) { return value.toLocaleLowerCase().normalize('NFKD').replace(/[‘’ʻʼ'`]/g,'').replace(/[\u0300-\u036f]/g,''); }
     function recommendedTheme() {
@@ -254,48 +281,34 @@
     function renderThemes() {
       const query = normalized($('themeSearch').value.trim());
       const visible = themes.filter(theme => (state.filter === 'all' || theme.group === state.filter) && normalized(theme.name+' '+theme.tags).includes(query));
-      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+theme.name+' uslubini tanlash" aria-pressed="'+(state.template === theme.id)+'"><img class="mini-slide" src="theme-previews/'+theme.id+'.jpg" style="'+palette(theme)+'" alt="'+theme.name+' — haqiqiy birinchi slayd namunasi" width="960" height="540" loading="lazy" decoding="async"><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+theme.name+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
+      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+theme.name+' — '+copy().selected+'" aria-pressed="'+(state.template === theme.id)+'"><span class="mini-slide-frame" style="'+palette(theme)+'"><img class="mini-slide" src="theme-previews/'+theme.id+'.jpg" alt="'+theme.name+' — '+copy().firstPage+'" width="960" height="540" loading="lazy" decoding="async"></span><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+theme.name+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
       $('emptyThemes').hidden = visible.length > 0;
     }
     function updatePreview() {
       const theme = selectedTheme();
       $('deckPreview').setAttribute('style',palette(theme));
       $('deckPreviewImage').src = 'theme-previews/'+theme.id+'.jpg';
-      $('deckPreviewImage').alt = theme.name+' — haqiqiy birinchi slayd namunasi';
-      $('previewTheme').textContent = theme.name + (state.template === 'auto' ? ' · mavzuga mos' : '');
-      $('summaryTheme').textContent = state.template === 'auto' ? 'Mavzuga mos' : theme.name;
-      $('summaryDetails').textContent = state.slideCount+' + 3 bonus = '+(state.slideCount+3)+' slayd';
-      $('summaryLanguage').textContent = languages[$('language').value] || 'Tanlanmagan';
-      $('summaryPlan').textContent = plans[state.tariff].name;
+      $('deckPreviewImage').alt = theme.name+' — '+copy().firstPage;
+      $('previewTheme').textContent = theme.name + (state.template === 'auto' ? ' · '+(uiLocale==='RU'?'по теме':uiLocale==='ENG'?'topic match':'mavzuga mos') : '');
+      $('summaryTheme').textContent = state.template === 'auto' ? (uiLocale==='RU'?'По теме':uiLocale==='ENG'?'Topic match':'Mavzuga mos') : theme.name;
+      $('summaryDetails').textContent = state.slideCount == null ? copy().choose : String(state.slideCount);
+      $('summaryLanguage').textContent = languages[$('language').value] || copy().choose;
+      $('summaryPlan').textContent = copy().planNames[state.tariff][0];
       $('totalPrice').textContent = Number(state.tariff).toLocaleString('ru-RU').replace(/\u00a0/g,' ');
       $('topicCounter').textContent = $('topic').value.length+' / 150';
       $('autoTheme').setAttribute('aria-pressed',String(state.template === 'auto'));
-      document.querySelectorAll('[data-count]').forEach(button => button.setAttribute('aria-pressed',String(Number(button.dataset.count) === state.slideCount)));
+      document.querySelectorAll('[data-count]').forEach(button => button.setAttribute('aria-pressed',String(state.slideCount != null && Number(button.dataset.count) === state.slideCount)));
       document.querySelectorAll('[data-tariff]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.tariff === state.tariff)));
     }
-    function saveDraft() {
-      // Name and language require an explicit choice each time the form opens.
-      try { localStorage.setItem(DRAFT_KEY,JSON.stringify({topic:$('topic').value,slideCount:state.slideCount,template:state.template,tariff:state.tariff})); } catch(error) { /* Storage may be unavailable in private WebViews. */ }
-    }
-    function restoreDraft() {
-      try {
-        const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
-        if(!draft || typeof draft !== 'object') return;
-        if(typeof draft.topic === 'string') $('topic').value = draft.topic.slice(0,150);
-        if(counts.includes(Number(draft.slideCount))) state.slideCount = Number(draft.slideCount);
-        if(draft.template === 'auto' || themes.some(theme => theme.id === draft.template)) state.template = draft.template;
-        if(Object.prototype.hasOwnProperty.call(plans,draft.tariff)) state.tariff = String(draft.tariff);
-      } catch(error) { /* Ignore obsolete or malformed drafts. */ }
-    }
-    function clearError() { ['topic','name','language'].forEach(id => { $(id).removeAttribute('aria-invalid'); $(id+'Error').hidden = true; }); $('globalNotice').hidden = true; }
-    function changed() { clearError(); updatePreview(); saveDraft(); }
+    function clearError() { ['topic','name','language'].forEach(id => { $(id).removeAttribute('aria-invalid'); $(id+'Error').hidden = true; }); $('countError').hidden=true; $('countOptions').removeAttribute('aria-invalid'); $('globalNotice').hidden = true; }
+    function changed() { clearError(); updatePreview(); }
     function showNotice(message,success) { $('globalNotice').textContent = message; $('globalNotice').className = 'notice '+(success ? 'success' : 'error-notice'); $('globalNotice').hidden = false; $('globalNotice').focus(); }
     function newRequestId() {
       if(window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
       if(window.crypto && typeof window.crypto.getRandomValues === 'function') return 'slide-'+Array.from(window.crypto.getRandomValues(new Uint32Array(4)),part => part.toString(16).padStart(8,'0')).join('');
       return 'slide-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
     }
-    function resetSubmission() { state.pending = false; $('submitBtn').disabled = false; $('submitLabel').textContent = canSend ? 'Taqdimot yaratish' : 'Telegram orqali yarating'; }
+    function resetSubmission() { state.pending = false; $('submitBtn').disabled = false; $('submitLabel').textContent = canSend ? copy().submit : copy().previewOnly; }
     function submitForm(event) {
       if(event) event.preventDefault();
       if(state.pending) return;
@@ -304,33 +317,33 @@
       const name = $('name').value.replace(/\s+/g,' ').trim();
       const language = $('language').value;
       const errors = [];
-      if(topic.length < 3 || topic.length > 150 || /[\u0000-\u001f\u007f-\u009f]/.test(topic)) { $('topicError').textContent = 'Mavzu 3–150 belgidan iborat bo‘lsin.'; errors.push('topic'); }
-      if(name.length < 3 || name.length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || name.split(/\s+/).length < 2 || (name.match(/\p{L}/gu) || []).length < 3) { $('nameError').textContent = 'Ism va familiyangizni to‘liq kiriting (3–80 belgi).'; errors.push('name'); }
+      if(topic.length < 3 || topic.length > 150 || /[\u0000-\u001f\u007f-\u009f]/.test(topic)) { $('topicError').textContent = copy().validTopic; errors.push('topic'); }
+      if(name.length < 3 || name.length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || name.split(/\s+/).length < 2 || (name.match(/\p{L}/gu) || []).length < 3) { $('nameError').textContent = copy().validName; errors.push('name'); }
       if(!Object.prototype.hasOwnProperty.call(languages,language)) errors.push('language');
-      errors.forEach(id => { $(id).setAttribute('aria-invalid','true'); $(id+'Error').hidden = false; });
-      if(errors.length) { $(errors[0]).focus(); return; }
-      if(!canSend) { showNotice('Buyurtma yuborish uchun sahifani Telegram botdagi taqdimot sozlamalari tugmasidan oching.'); return; }
+      if(!counts.includes(state.slideCount)) { $('countOptions').setAttribute('aria-invalid','true'); $('countError').hidden=false; errors.push('countOptions'); }
+      errors.forEach(id => { if(id==='countOptions') return; $(id).setAttribute('aria-invalid','true'); $(id+'Error').hidden = false; });
+      if(errors.length) { const target=$(errors[0]); if(errors[0]==='countOptions') target.querySelector('button').focus(); else target.focus(); return; }
+      if(!canSend) { showNotice(copy().previewOnly); return; }
       const payload = {topic:topic,name:name,language:language,slideCount:String(state.slideCount),template:state.template,tariff:state.tariff,format:'pptx'};
       const fingerprint = JSON.stringify(payload);
       if(state.requestFingerprint !== fingerprint || !state.requestId) { state.requestId = newRequestId(); state.requestFingerprint = fingerprint; }
       payload.requestId = state.requestId;
       const data = JSON.stringify(payload);
       const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(data).length : new Blob([data]).size;
-      if(bytes > 4096) { showNotice('Ma’lumot hajmi katta. Mavzu yoki ismni qisqartiring.'); return; }
+      if(bytes > 4096) { showNotice(copy().large); return; }
       state.pending = true;
       $('submitBtn').disabled = true;
-      $('submitLabel').textContent = 'Botga yuborilmoqda…';
-      saveDraft();
+      $('submitLabel').textContent = copy().sending;
       try {
         tg.sendData(data);
         // sendData closes a keyboard-launched WebApp. If the bridge leaves it open, allow a safe retry with the same request ID.
-        window.setTimeout(function() { if(state.pending) { resetSubmission(); showNotice('Yuborish so‘rovi berildi. Natijani bot chatida tekshiring. Chatda buyurtma ko‘rinmasa, qayta urinishingiz mumkin.',true); } },8000);
-      } catch(error) { resetSubmission(); showNotice('Buyurtma yuborilmadi. Telegram ulanishini tekshirib, yana urinib ko‘ring.'); }
+        window.setTimeout(function() { if(state.pending) { resetSubmission(); showNotice(copy().sent,true); } },8000);
+      } catch(error) { resetSubmission(); showNotice(copy().failed); }
     }
 
-    $('countOptions').innerHTML = counts.map(count => '<button type="button" class="count-button" data-count="'+count+'" aria-pressed="'+(count === state.slideCount)+'" aria-label="'+count+' asosiy va 3 bonus, jami '+(count+3)+' slayd"><strong>'+count+'</strong><small>+ 3 bonus · '+(count+3)+' jami</small></button>').join('');
-    $('themeFilters').innerHTML = filters.map(filter => '<button type="button" class="filter" data-filter="'+filter.id+'" aria-pressed="'+(filter.id === state.filter)+'">'+filter.name+'</button>').join('');
-    $('planOptions').innerHTML = Object.keys(plans).map(tariff => '<button type="button" class="plan-button" data-tariff="'+tariff+'" aria-pressed="'+(tariff === state.tariff)+'"><span class="selection-mark" aria-hidden="true">✓</span><span class="plan-text"><strong>'+plans[tariff].name+'</strong><small>'+plans[tariff].detail+'</small></span><span class="plan-price">'+Number(tariff).toLocaleString('ru-RU')+' so‘m</span></button>').join('');
+    $('countOptions').innerHTML = counts.map(count => '<button type="button" class="count-button" data-count="'+count+'" aria-pressed="false" aria-label="'+count+'"><strong>'+count+'</strong></button>').join('');
+      $('themeFilters').innerHTML = filters.map(filter => '<button type="button" class="filter" data-filter="'+filter.id+'" aria-pressed="'+(filter.id === state.filter)+'">'+copy().filters[filter.id]+'</button>').join('');
+      $('planOptions').innerHTML = Object.keys(plans).map(tariff => '<button type="button" class="plan-button" data-tariff="'+tariff+'" aria-pressed="'+(tariff === state.tariff)+'"><span class="selection-mark" aria-hidden="true">✓</span><span class="plan-text"><strong>'+copy().planNames[tariff][0]+'</strong><small>'+copy().planNames[tariff][1]+'</small></span><span class="plan-price">'+Number(tariff).toLocaleString('ru-RU')+' '+copy().currency+'</span></button>').join('');
     $('countOptions').addEventListener('click',event => { const button = event.target.closest('[data-count]'); if(button) { state.slideCount = Number(button.dataset.count); changed(); } });
     $('planOptions').addEventListener('click',event => { const button = event.target.closest('[data-tariff]'); if(button) { state.tariff = button.dataset.tariff; changed(); } });
     $('themeGrid').addEventListener('click',event => { const button = event.target.closest('[data-theme]'); if(button) { state.template = button.dataset.theme; renderThemes(); changed(); } });
@@ -340,9 +353,18 @@
     ['topic','name'].forEach(id => $(id).addEventListener('input',changed));
     $('language').addEventListener('change',changed);
     $('presentationForm').addEventListener('submit',submitForm);
-    restoreDraft();
+    function resetFormForReopen() {
+      $('presentationForm').reset(); $('topic').value=''; $('name').value=''; $('language').value=''; $('themeSearch').value='';
+      state.template='auto'; state.slideCount=null; state.tariff='5000'; state.filter='all'; state.pending=false; state.requestId=null; state.requestFingerprint=null;
+      document.querySelectorAll('[data-filter]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.filter==='all')));
+      resetSubmission(); clearError(); renderThemes(); updatePreview();
+    }
+    window.addEventListener('pagehide',resetFormForReopen);
+    window.addEventListener('pageshow',event=>{ if(event.persisted) resetFormForReopen(); });
+    if(tg && typeof tg.onEvent==='function') { try { tg.onEvent('activated',resetFormForReopen); tg.onEvent('deactivated',resetFormForReopen); } catch(error) { /* Older Telegram clients do not expose lifecycle events. */ } }
+    applyUiLanguage();
     renderThemes();
-    updatePreview();
+    resetFormForReopen();
   </script>
 </body>
 </html>
