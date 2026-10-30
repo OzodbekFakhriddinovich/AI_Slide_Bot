@@ -26,6 +26,11 @@ public final class ThemePreviewGenerator {
                 Files.createDirectories(localized);
                 for(SlideTheme theme:SlideTheme.ALL) {
                     String title=titles.get(language)[Integer.parseInt(theme.id())-1];
+                    title += switch(language) {
+                        case "ru" -> " — влияние на общество, ключевые причины и практические решения";
+                        case "eng" -> " and its impact, key challenges, and practical solutions";
+                        default -> " va uning jamiyatga ta'siri, asosiy muammolar hamda amaliy yechimlar";
+                    };
                     String code=language.equals("uz")?"UZ":language.equals("ru")?"RU":"ENG";
                     var cover=new SlideDeck.Slide(title,"",List.of(),SlideDeck.Layout.COVER,"",List.of());
                     Path file=Path.of(renderer.createPptx(new SlideDeck(title,code,List.of(cover)),authors.get(language),theme.id()));

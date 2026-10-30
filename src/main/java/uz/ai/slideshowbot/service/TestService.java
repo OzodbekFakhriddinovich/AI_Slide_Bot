@@ -44,6 +44,8 @@ public class TestService {
     @Autowired
     private GptTextGeneratorService gptTextGeneratorService;   // Gemini orqali test generatsiya
 
+    @Autowired private WebResearchService webResearchService;
+
     @Autowired
     private UserRepository userRepository;
 
@@ -590,18 +592,63 @@ public class TestService {
                     languageLabel, langInstruction, count, correctLabel, count);
         };
 
-        String responseJson = gptTextGeneratorService.callGemini(prompt, false);
+        try {
+            String responseJson = gptTextGeneratorService.callGemini(prompt, false);
+            String rawText = gptTextGeneratorService.extractGeneratedText(responseJson);
+            validateTestFormat(rawText, count);
+            return rawText.trim();
+        } catch (Exception modelUnavailable) {
+            String fallback = createSourceBasedTest(topic,count,lang);
+            validateTestFormat(fallback,count);
+            return fallback;
+        }
+    }
 
-        String rawText = gptTextGeneratorService.extractGeneratedText(responseJson);
-        validateTestFormat(rawText, count);
-        return rawText.trim();
+    private String createSourceBasedTest(String topic,int count,String lang) throws Exception {
+        var bundle=webResearchService.research(topic,lang,count,0);
+        String target=WebResearchService.wikiLanguage(lang);
+        record Item(String heading,String fact) {}
+        java.util.List<Item> items=new java.util.ArrayList<>();
+        for(var document:bundle.documents()) {
+            if(!target.equals(document.language())) continue;
+            for(var section:document.sections()) for(String fact:SlidePlanningService.sentences(section.text())) {
+                if(items.stream().noneMatch(item->item.fact().equalsIgnoreCase(fact))) items.add(new Item(section.heading(),fact));
+            }
+        }
+        if(items.size()<count) throw new java.io.IOException(WebResearchService.unavailable(lang));
+        String stem=switch(lang) {
+            case "RU" -> "Какое утверждение приведено в разделе «%s»?";
+            case "ENG" -> "Which statement is presented in the “%s” section?";
+            default -> "“%s” bo‘limida qaysi ma’lumot keltirilgan?";
+        };
+        String answerHeading=switch(lang) { case "RU"->"ПРАВИЛЬНЫЕ ОТВЕТЫ";case "ENG"->"CORRECT ANSWERS";default->"TO'G'RI JAVOBLAR"; };
+        StringBuilder out=new StringBuilder();
+        java.util.List<String> answerKeys=new java.util.ArrayList<>();
+        java.util.List<String> letters=java.util.List.of("A","B","C","D");
+        for(int q=0;q<count;q++) {
+            Item correct=items.get(q);
+            out.append(q+1).append(". ").append(stem.formatted(correct.heading())).append('\n');
+            java.util.List<Item> choices=new java.util.ArrayList<>(); choices.add(correct);
+            for(Item item:items) if(!item.heading().equalsIgnoreCase(correct.heading()) && choices.size()<4) choices.add(item);
+            if(choices.size()<4) throw new java.io.IOException(WebResearchService.unavailable(lang));
+            int answerIndex=(q*3)%4;
+            Item displaced=choices.get(answerIndex); choices.set(answerIndex,correct); choices.set(0,displaced);
+            for(int i=0;i<4;i++) out.append(letters.get(i)).append(") ").append(choices.get(i).heading()).append(" — ").append(choices.get(i).fact()).append('\n');
+            answerKeys.add((q+1)+". "+letters.get(answerIndex));
+            out.append('\n');
+        }
+        out.append("--- ").append(answerHeading).append(" ---\n").append(String.join("\n",answerKeys));
+        return out.toString();
     }
 
     private void validateTestFormat(String text, int expectedCount) {
         java.util.regex.Matcher marker = java.util.regex.Pattern.compile(
                 "(?im)^\\s*-{2,}\\s*(?:TO['’`]?G['’`]?RI\\s+JAVOBLAR|CORRECT\\s+ANSWERS|ПРАВИЛЬНЫЕ\\s+ОТВЕТЫ)\\s*-{2,}\\s*$")
                 .matcher(text);
-        if (!marker.find()) throw new IllegalStateException("Generated test is missing its answer key.");
+        if (!marker.find()) {
+            marker=java.util.regex.Pattern.compile("(?im)^\\s*-{2,}\\s*ПРАВИЛЬНЫЕ\\s+ОТВЕТЫ\\s*-{2,}\\s*$").matcher(text);
+            if(!marker.find()) throw new IllegalStateException("Generated test is missing its answer key.");
+        }
         String questions = text.substring(0, marker.start());
         String answers = text.substring(marker.end());
         long questionCount = java.util.regex.Pattern.compile("(?m)^\\s*\\d+[.)]\\s+\\S.*$")

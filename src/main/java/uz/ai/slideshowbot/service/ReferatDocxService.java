@@ -18,6 +18,8 @@ public class ReferatDocxService {
     @Autowired
     private GptTextGeneratorService gptService;
 
+    @Autowired private WebResearchService webResearchService;
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     private static final Map<Integer, Integer> SAHIFA_BOB = Map.of(15, 3, 20, 4, 25, 5);
@@ -154,6 +156,7 @@ MUHIM:
 - Hech qanday JSON ishlatmang! Faqat toza matn va Markdown sarlavhalari yozing.
 """, mavzu, langNote, bobCount, bobStructure.toString());
 
+        try {
         String responseJson = gptService.callGemini(prompt, false);
         String raw = gptService.extractGeneratedText(responseJson);
 
@@ -163,6 +166,46 @@ MUHIM:
         Map<String, Object> result = parseMarkdownContent(raw, bobCount, bobNames, mavzu, lang);
         System.out.println("✅ Referat kontenti muvaffaqiyatli parse qilindi! Chapters: " +
                 ((result.get("chapters") instanceof List<?> l) ? l.size() : 0));
+        if (((List<?>) result.getOrDefault("chapters", List.of())).size() >= bobCount) return result;
+        throw new IllegalStateException("Generated essay is incomplete.");
+        } catch (Exception modelUnavailable) {
+            return sourceBasedReferat(mavzu,bobCount,bobNames,lang);
+        }
+    }
+
+    private Map<String,Object> sourceBasedReferat(String topic,int bobCount,String[][] bobNames,String lang) throws Exception {
+        String target=WebResearchService.wikiLanguage(lang);
+        var bundle=webResearchService.research(topic,lang,bobCount*3+1,0);
+        record Fact(String heading,String text,String title,String url) {}
+        List<Fact> facts=new ArrayList<>();
+        for(var document:bundle.documents()) {
+            if(!target.equals(document.language())) continue;
+            for(var section:document.sections()) for(String sentence:SlidePlanningService.sentences(section.text()))
+                if(facts.stream().noneMatch(f->f.text().equalsIgnoreCase(sentence))) facts.add(new Fact(section.heading(),sentence,document.title(),document.url()));
+        }
+        if(facts.size()<bobCount*3) throw new java.io.IOException(WebResearchService.unavailable(lang));
+        List<Map<String,Object>> chapters=new ArrayList<>(); int cursor=0;
+        int perSection=Math.max(1,facts.size()/(bobCount*3));
+        for(int chapterIndex=0;chapterIndex<bobCount;chapterIndex++) {
+            Map<String,Object> chapter=new HashMap<>(); chapter.put("chapter_name",bobNames[chapterIndex][0]);
+            List<Map<String,Object>> subsections=new ArrayList<>();
+            for(int sectionIndex=0;sectionIndex<3;sectionIndex++) {
+                Fact first=facts.get(cursor); StringBuilder body=new StringBuilder();
+                for(int j=0;j<perSection && cursor<facts.size();j++) body.append(facts.get(cursor++).text()).append("\n\n");
+                Map<String,Object> subsection=new HashMap<>();
+                subsection.put("title",(chapterIndex+1)+"."+(sectionIndex+1)+". "+first.heading());
+                subsection.put("text",body.toString().trim()); subsections.add(subsection);
+            }
+            chapter.put("subsections",subsections); chapters.add(chapter);
+        }
+        StringBuilder intro=new StringBuilder(),conclusion=new StringBuilder();
+        facts.stream().limit(Math.min(8,facts.size())).forEach(f->intro.append(f.text()).append("\n\n"));
+        facts.stream().skip(Math.max(0,facts.size()-6)).forEach(f->conclusion.append(f.text()).append("\n\n"));
+        LinkedHashSet<String> references=new LinkedHashSet<>();
+        for(Fact fact:facts) references.add(fact.title()+" — "+fact.url());
+        Map<String,Object> result=new HashMap<>();
+        result.put("introduction",intro.toString().trim()); result.put("conclusion",conclusion.toString().trim());
+        result.put("chapters",chapters); result.put("references",new ArrayList<>(references));
         return result;
     }
 

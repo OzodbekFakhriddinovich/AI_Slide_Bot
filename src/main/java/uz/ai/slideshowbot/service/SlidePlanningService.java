@@ -205,7 +205,7 @@ public class SlidePlanningService {
     }
     private Slide slide(String title,String subtitle,List<Fact> facts,Layout layout) {
         LinkedHashMap<String,Source> sources=new LinkedHashMap<>(); facts.forEach(f->sources.putIfAbsent(f.doc().url(),source(f)));
-        String query=facts.get(0).doc().imageQuery();
+        String query=title + " " + subtitle + " " + facts.get(0).doc().imageQuery();
         return new Slide(title,subtitle,facts.stream().map(Fact::text).toList(),layout,query,List.copyOf(sources.values()));
     }
     private static Source source(Fact fact) { return new Source(fact.doc().title(),fact.doc().url()); }

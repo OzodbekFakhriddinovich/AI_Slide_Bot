@@ -45,8 +45,8 @@ public class PptxCreatorService {
     public PptxCreatorService(ImageSearchService imageSearch) {
         this.imageSearch = imageSearch;
         AtomicInteger sequence = new AtomicInteger();
-        imageWorkers = new ThreadPoolExecutor(3, 3, 30, TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(12), task -> {
+        imageWorkers = new ThreadPoolExecutor(5, 5, 30, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(48), task -> {
                     Thread worker = new Thread(task, "slide-images-" + sequence.incrementAndGet());
                     worker.setDaemon(true);
                     return worker;
@@ -85,7 +85,9 @@ public class PptxCreatorService {
                     boolean denseFacts=content.layout()!=Layout.AGENDA && content.layout()!=Layout.SOURCES
                             && content.bullets().size()>=3 && (content.bullets().stream().mapToInt(String::length).sum()>760
                             || content.bullets().stream().anyMatch(fact->fact.length()>260));
-                    if(denseFacts) factRows(slide,content.bullets(),bodyY,theme);
+                    if(image!=null && content.layout()!=Layout.AGENDA && content.layout()!=Layout.SOURCES)
+                        split(ppt,slide,content.bullets(),bodyY,theme,image,index);
+                    else if(denseFacts) factRows(slide,content.bullets(),bodyY,theme);
                     else
                     switch (content.layout()) {
                         case AGENDA -> agenda(slide, content.bullets(), bodyY, theme);
@@ -125,9 +127,10 @@ public class PptxCreatorService {
         Future<?> job;
         try {
             job = imageWorkers.submit(() -> {
-                Set<String> excludedUrls = new HashSet<>(), hashes = new HashSet<>();
-                int maximum = Math.min(5, Math.max(2, deck.slides().size() / 3));
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(43);
+                Set<String> excludedUrls = ConcurrentHashMap.newKeySet(), hashes = ConcurrentHashMap.newKeySet();
+                int maximum = (int) deck.slides().stream().filter(s -> s.layout()!=Layout.AGENDA && s.layout()!=Layout.SOURCES).count();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(75);
+                List<Future<?>> requests=new ArrayList<>();
                 for (int i = 0; i < deck.slides().size() && found.size() < maximum; i++) {
                     if (Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline) break;
                     Slide slide = deck.slides().get(i);
@@ -135,30 +138,38 @@ public class PptxCreatorService {
                             && deck.title().toLowerCase(Locale.ROOT).matches(".*(xavfsiz|security|cyber|безопас|кибер).*")
                             && getClass().getResource("/slides/cyber-cover.jpg")!=null) continue;
                     if (!wantsImage(slide) || slide.imageQuery().isBlank()) continue;
-                    try {
-                        ImageSearchService.ImageAsset asset = imageSearch.findImage(slide.imageQuery(), deck.title(), Set.copyOf(excludedUrls));
-                        if (asset == null || asset.data() == null || asset.data().length == 0 || asset.url() == null
-                                || asset.url().isBlank() || excludedUrls.contains(asset.url())) continue;
-                        excludedUrls.add(asset.url());
-                        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(asset.data()));
-                        if (!hashes.add(hash)) continue;
-                        try (ByteArrayInputStream input = new ByteArrayInputStream(asset.data())) {
-                            BufferedImage decoded = ImageIO.read(input);
-                            if (decoded == null || decoded.getWidth() < 160 || decoded.getHeight() < 100) continue;
-                        }
-                        found.put(i, asset);
-                    } catch (Exception unavailable) { if (Thread.currentThread().isInterrupted()) break; }
+                    final int index=i; final Slide candidate=slide;
+                    requests.add(imageWorkers.submit(() -> {
+                        try {
+                            ImageSearchService.ImageAsset asset=imageSearch.findImage(candidate.imageQuery(),deck.title(),excludedUrls);
+                            if(asset==null || asset.data()==null || asset.data().length==0 || asset.url()==null || asset.url().isBlank()) return;
+                            excludedUrls.add(asset.url());
+                            String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(asset.data()));
+                            if(!hashes.add(hash)) return;
+                            try(ByteArrayInputStream input=new ByteArrayInputStream(asset.data())) {
+                                BufferedImage decoded=ImageIO.read(input);
+                                if(decoded==null || decoded.getWidth()<160 || decoded.getHeight()<100) return;
+                            }
+                            found.put(index,asset);
+                        } catch(Exception ignored) {}
+                    }));
+                }
+                for(Future<?> request:requests) {
+                    long remaining=deadline-System.nanoTime();
+                    if(remaining<=0) { request.cancel(true); continue; }
+                    try { request.get(remaining,TimeUnit.NANOSECONDS); }
+                    catch(Exception unavailable) { request.cancel(true); }
                 }
             });
         } catch (RejectedExecutionException busy) { return found; }
-        try { job.get(45, TimeUnit.SECONDS); }
+        try { job.get(78, TimeUnit.SECONDS); }
         catch (InterruptedException interrupted) { job.cancel(true); Thread.currentThread().interrupt(); }
         catch (Exception unavailable) { job.cancel(true); }
         return new HashMap<>(found);
     }
 
     private static boolean wantsImage(Slide slide) {
-        return slide.layout() == Layout.COVER || slide.layout() == Layout.SPLIT || slide.layout() == Layout.EDITORIAL;
+        return slide.layout() != Layout.AGENDA && slide.layout() != Layout.SOURCES;
     }
 
     private void cover(XMLSlideShow ppt, XSLFSlide slide, Slide content, String userName, SlideTheme theme,
@@ -537,6 +548,118 @@ public class PptxCreatorService {
             case LINES -> {
                 for(int i=0;i<5;i++) rounded(slide,x+i*43,y+height-(i+1)*34,25,(i+1)*34,i==4?theme.accent():subtle);
                 line(slide,x,y+height+8,x+width,y+height+8,theme.accent(),1);
+            }
+            case FINANCE -> {
+                int base=y+height-24;
+                for(int i=0;i<6;i++) rounded(slide,x+12+i*39,base-(i+1)*(18+(i%2)*9),25,(i+1)*(18+(i%2)*9),i==5?theme.accent():subtle);
+                line(slide,x+5,base+3,x+width-5,base+3,theme.accent(),1.5);
+                line(slide,x+15,y+112,x+85,y+80,theme.accent(),2); line(slide,x+85,y+80,x+145,y+91,theme.accent(),2); line(slide,x+145,y+91,x+width-10,y+20,theme.accent(),2);
+            }
+            case MEDICAL -> {
+                rounded(slide,x+width/2-19,y+31,38,height-50,subtle); circle(slide,x+width/2-27,y+height-57,54,theme.surface(),theme.accent(),2);
+                rounded(slide,x+width/2-8,y+55,16,height-90,theme.accent());
+                rounded(slide,x+width/2-54,y+height/2-8,108,16,theme.accent());
+                for(int i=0;i<3;i++) circle(slide,x+14+i*30,y+15,8,theme.accent(),null,0);
+            }
+            case ARCHITECTURE -> {
+                int base=y+height-20;
+                line(slide,x+4,base,x+width-4,base,theme.accent(),2);
+                for(int i=0;i<4;i++) { int cx=x+24+i*62; line(slide,cx,base,cx,y+78,theme.accent(),3); line(slide,cx+35,base,cx+35,y+78,theme.accent(),3); shape(slide,ShapeType.ARC,cx,y+43,35,70,null,subtle,2); }
+                line(slide,x+16,y+77,x+width-12,y+77,theme.accent(),3);
+                line(slide,x+width/2,y+20,x+width/2,y+57,subtle,1);
+            }
+            case CLIMATE -> {
+                rounded(slide,x+width/2-12,y+15,24,height-50,theme.surface()); circle(slide,x+width/2-23,y+height-65,46,theme.accent(),null,0);
+                rounded(slide,x+width/2-4,y+50,8,height-100,theme.accent());
+                for(int i=0;i<5;i++) { int yy=y+height-26-i*40; line(slide,x+width/2+17,yy,x+width/2+39,yy,theme.muted(),1); }
+                for(int i=0;i<3;i++) { line(slide,x+25+i*28,y+52,x+25+i*28,y+28,theme.accent(),1); circle(slide,x+19+i*28,y+18,12,subtle,theme.accent(),1); }
+            }
+            case HISTORY -> {
+                int base=y+height-18;
+                line(slide,x+10,base,x+width-10,base,theme.accent(),2);
+                for(int i=0;i<3;i++) { int xx=x+35+i*78; line(slide,xx,base,xx,y+91,theme.accent(),3); line(slide,xx+31,base,xx+31,y+91,theme.accent(),3); shape(slide,ShapeType.ARC,xx,y+60,31,62,null,subtle,2); }
+                line(slide,x+19,y+88,x+width-19,y+88,theme.accent(),3); line(slide,x+26,y+79,x+width-26,y+79,subtle,1.5);
+            }
+            case EDUCATION, BOOKS -> {
+                shape(slide,ShapeType.RECT,x+20,y+42,width/2-24,height-75,theme.surface(),theme.accent(),2);
+                shape(slide,ShapeType.RECT,x+width/2+4,y+42,width/2-24,height-75,theme.surface(),theme.accent(),2);
+                line(slide,x+width/2,y+46,x+width/2,y+height-34,theme.accent(),2);
+                for(int i=0;i<4;i++) { line(slide,x+35,y+66+i*28,x+width/2-18,y+66+i*28,subtle,1.4); line(slide,x+width/2+18,y+66+i*28,x+width-35,y+66+i*28,subtle,1.4); }
+                if(theme.decoration()==SlideTheme.Decoration.EDUCATION) { line(slide,x+width/2,y+35,x+width/2,y+height-24,theme.accent(),3); circle(slide,x+width/2-7,y+15,14,theme.accent(),null,0); }
+            }
+            case SOLAR -> {
+                circle(slide,x+width/2-27,y+height/2-27,54,theme.accent(),null,0);
+                for(int i=0;i<4;i++) { XSLFAutoShape orbit=shape(slide,ShapeType.ELLIPSE,x+5,y+height/2-40,width-10,80,null,subtle,1.5); orbit.setRotation(i*45); }
+                for(int i=0;i<5;i++) circle(slide,x+18+i*48,y+20+(i%2)*27,8+i%3*3,theme.text(),null,0);
+            }
+            case FOREST -> {
+                for(int tree=0;tree<3;tree++) { int tx=x+45+tree*83,base=y+height-20-(tree%2)*16;
+                    line(slide,tx,base,tx,y+height/2,theme.accent(),3);
+                    for(int level=0;level<4;level++) { int yy=y+height/2-level*30;
+                        line(slide,tx,yy,tx-30,yy-22,subtle,2); line(slide,tx,yy,tx+30,yy-22,theme.accent(),2);
+                        circle(slide,tx-40,yy-31,18,subtle,theme.accent(),1); circle(slide,tx+24,yy-31,18,subtle,theme.accent(),1);
+                    }
+                }
+                line(slide,x+12,y+height-16,x+width-12,y+height-16,theme.accent(),2);
+            }
+            case LEAF -> {
+                line(slide,x+width/2,y+height-10,x+width/2,y+20,theme.accent(),3);
+                for(int i=0;i<5;i++) { int yy=y+height-34-i*38; XSLFAutoShape a=shape(slide,ShapeType.ELLIPSE,x+width/2-60,yy,62,28,subtle,theme.accent(),1.2); a.setRotation(25); XSLFAutoShape b=shape(slide,ShapeType.ELLIPSE,x+width/2,yy-15,62,28,subtle,theme.accent(),1.2); b.setRotation(-25); }
+            }
+            case CORAL -> {
+                int base=y+height-12; line(slide,x+12,base,x+width-12,base,theme.accent(),2);
+                for(int i=0;i<5;i++) { int cx=x+28+i*50,top=y+35+(i%2)*28; line(slide,cx,base,cx,top+58,theme.accent(),3); line(slide,cx,top+74,cx-17,top+42,theme.accent(),2); line(slide,cx,top+70,cx+18,top+34,theme.accent(),2); circle(slide,cx-23,top+28,14,subtle,theme.accent(),1); circle(slide,cx+12,top+19,14,subtle,theme.accent(),1); }
+                for(int i=0;i<8;i++) circle(slide,x+16+i*38,y+12+(i%2)*10,5,theme.accent(),null,0);
+            }
+            case BLUEPRINT -> {
+                for(int i=0;i<6;i++) { line(slide,x+i*42,y,x+i*42,y+height,subtle,0.8); line(slide,x,y+i*36,x+width,y+i*36,subtle,0.8); }
+                shape(slide,ShapeType.RECT,x+28,y+30,width-56,height-65,null,theme.accent(),2);
+                line(slide,x+28,y+height/2,x+width-28,y+height/2,theme.accent(),1.8);
+                line(slide,x+width/2,y+30,x+width/2,y+height-35,theme.accent(),1.8);
+                circle(slide,x+width/2-24,y+height/2-24,48,theme.surface(),theme.accent(),2);
+            }
+            case MOLECULE -> {
+                int[][] n={{x+40,y+45},{x+width-40,y+55},{x+width/2,y+height/2},{x+50,y+height-45},{x+width-42,y+height-55},{x+width/2,y+25}};
+                int[][] edges={{0,2},{1,2},{2,3},{2,4},{2,5},{0,5},{1,5}};
+                for(int[] e:edges) line(slide,n[e[0]][0],n[e[0]][1],n[e[1]][0],n[e[1]][1],subtle,3);
+                for(int i=0;i<n.length;i++) circle(slide,n[i][0]-12,n[i][1]-12,24,i==2?theme.accent():theme.surface(),theme.accent(),2);
+            }
+            case TECH -> {
+                shape(slide,ShapeType.RECT,x+width/2-48,y+height/2-43,96,86,theme.surface(),theme.accent(),2);
+                text(slide,"AI",x+width/2-38,y+height/2-17,76,38,28,20,true,theme.accent(),TextAlign.CENTER);
+                for(int i=0;i<5;i++) { int d=y+height/2-32+i*16; line(slide,x+width/2-65,d,x+width/2-49,d,theme.accent(),2); line(slide,x+width/2+48,d,x+width/2+64,d,theme.accent(),2); }
+                for(int i=0;i<4;i++) { int xx=x+width/2-30+i*20; line(slide,xx,y+height/2-59,xx,y+height/2-43,theme.accent(),2); line(slide,xx,y+height/2+43,xx,y+height/2+59,theme.accent(),2); }
+            }
+            case COMPASS -> {
+                circle(slide,x+width/2-70,y+height/2-70,140,null,theme.accent(),2);
+                circle(slide,x+width/2-48,y+height/2-48,96,null,subtle,1.5);
+                shape(slide,ShapeType.TRIANGLE,x+width/2-18,y+height/2-58,36,68,theme.accent(),null,0);
+                shape(slide,ShapeType.TRIANGLE,x+width/2-18,y+height/2-10,36,68,theme.surface(),theme.accent(),1);
+                circle(slide,x+width/2-6,y+height/2-6,12,theme.text(),null,0);
+            }
+            case QUOTE -> {
+                text(slide,"“ ”",x+width/2-106,y+height/2-116,212,140,112,84,true,theme.accent(),TextAlign.CENTER);
+                for(int i=0;i<4;i++) { rounded(slide,x+24,y+height/2+30+i*20,width-48-i*25,5,i==0?theme.accent():subtle); }
+            }
+            case MAP -> {
+                shape(slide,ShapeType.HEXAGON,x+30,y+30,width-60,height-60,theme.surface(),theme.accent(),2);
+                line(slide,x+width/2,y+45,x+width/2,y+height-45,subtle,1.5); line(slide,x+45,y+height/2,x+width-45,y+height/2,subtle,1.5);
+                circle(slide,x+width/2-12,y+height/2-12,24,theme.accent(),null,0);
+                line(slide,x+width/2,y+height/2,x+width-53,y+58,theme.accent(),2);
+                circle(slide,x+width-69,y+43,30,theme.surface(),theme.accent(),1.5);
+            }
+            case STARS -> {
+                for(int i=0;i<18;i++) { int sx=x+12+(i*47)%(width-24),sy=y+12+(i*71)%(height-24),r=5+(i%3)*3; circle(slide,sx,sy,r,theme.accent(),null,0); }
+                shape(slide,ShapeType.STAR_5,x+width/2-41,y+height/2-41,82,82,theme.surface(),theme.accent(),2);
+                for(int i=0;i<3;i++) { XSLFAutoShape orbit=shape(slide,ShapeType.ELLIPSE,x+6,y+height/2-35,width-12,70,null,subtle,1); orbit.setRotation(i*60); }
+            }
+            case HEART -> {
+                shape(slide,ShapeType.HEART,x+width/2-57,y+height/2-52,114,104,subtle,theme.accent(),2);
+                line(slide,x+15,y+height/2,x+width/2-45,y+height/2,theme.accent(),2);
+                int[] xx={x+width/2-45,x+width/2-25,x+width/2-13,x+width/2+1,x+width/2+14,x+width/2+30,x+width/2+47};
+                int[] yy={y+height/2,y+height/2,y+height/2-28,y+height/2+30,y+height/2-14,y+height/2,y+height/2};
+                for(int i=0;i<xx.length-1;i++) line(slide,xx[i],yy[i],xx[i+1],yy[i+1],theme.accent(),2);
+                line(slide,x+width/2+47,y+height/2,x+width-12,y+height/2,theme.accent(),2);
             }
             default -> {
                 for(int i=0;i<3;i++) {

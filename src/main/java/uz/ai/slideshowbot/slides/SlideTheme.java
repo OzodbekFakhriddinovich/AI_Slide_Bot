@@ -8,7 +8,9 @@ import java.util.Locale;
 /** Shared, stable theme IDs used by the Telegram WebApp and slide renderer. */
 public record SlideTheme(String id, String name, Color background, Color surface,
                          Color text, Color muted, Color accent, Decoration decoration) {
-    public enum Decoration { NETWORK, WAVES, BOTANICAL, ORBITS, GRID, FRAME, DOTS, LINES }
+    public enum Decoration { NETWORK, WAVES, BOTANICAL, ORBITS, GRID, FRAME, DOTS, LINES,
+        FINANCE, MEDICAL, ARCHITECTURE, CLIMATE, HISTORY, EDUCATION, SOLAR, BOOKS,
+        FOREST, CORAL, BLUEPRINT, MOLECULE, TECH, COMPASS, QUOTE, LEAF, MAP, STARS, HEART }
 
     private static SlideTheme dark(int id, String name, String bg, String accent, Decoration motif) {
         Color background = Color.decode(bg);
@@ -29,26 +31,26 @@ public record SlideTheme(String id, String name, Color background, Color surface
             dark(2, "Ocean", "#062c46", "#38bdf8", Decoration.WAVES),
             dark(3, "Emerald", "#082e2a", "#34d399", Decoration.BOTANICAL),
             dark(4, "Violet", "#24183f", "#a78bfa", Decoration.ORBITS),
-            dark(5, "Amber", "#302315", "#fbbf24", Decoration.DOTS),
-            dark(6, "Rose", "#351b2b", "#fb8fa8", Decoration.ORBITS),
-            dark(7, "Slate", "#202b38", "#94b8d8", Decoration.LINES),
-            light(8, "Arctic", "#eef5fa", "#2586b7", Decoration.GRID),
-            light(9, "Sand", "#f1e8d8", "#a8743b", Decoration.FRAME),
-            dark(10, "Forest", "#102d24", "#a3d88a", Decoration.BOTANICAL),
-            dark(11, "Midnight", "#0c1025", "#7dd3fc", Decoration.DOTS),
-            light(12, "Coral", "#fff1eb", "#dc674d", Decoration.WAVES),
-            light(13, "Medical", "#eef7f6", "#098b86", Decoration.NETWORK),
-            dark(14, "Blueprint", "#12376a", "#80d8ff", Decoration.GRID),
-            light(15, "History", "#f3ead9", "#8f603b", Decoration.FRAME),
-            dark(16, "Science", "#0d2538", "#59e2d0", Decoration.ORBITS),
-            light(17, "Education", "#f4f0ff", "#7152c7", Decoration.DOTS),
-            dark(18, "Finance", "#122724", "#b5d46e", Decoration.LINES),
-            light(19, "Nature", "#eaf1e4", "#4e7d42", Decoration.BOTANICAL),
-            light(20, "Editorial", "#f6f2ed", "#be553b", Decoration.LINES),
-            dark(21, "Indigo", "#1c2151", "#a3a9ff", Decoration.NETWORK),
-            dark(22, "Copper", "#2d201d", "#e0a879", Decoration.FRAME),
-            light(23, "Lavender", "#f0eafb", "#8b64ba", Decoration.ORBITS),
-            dark(24, "Monochrome", "#17191d", "#f5f5f5", Decoration.GRID));
+            dark(5, "Amber", "#302315", "#fbbf24", Decoration.FINANCE),
+            dark(6, "Rose", "#351b2b", "#fb8fa8", Decoration.MEDICAL),
+            dark(7, "Slate", "#202b38", "#94b8d8", Decoration.ARCHITECTURE),
+            light(8, "Arctic", "#eef5fa", "#2586b7", Decoration.CLIMATE),
+            light(9, "Sand", "#f1e8d8", "#a8743b", Decoration.HISTORY),
+            dark(10, "Forest", "#102d24", "#a3d88a", Decoration.FOREST),
+            dark(11, "Midnight", "#0c1025", "#7dd3fc", Decoration.SOLAR),
+            light(12, "Coral", "#fff1eb", "#dc674d", Decoration.CORAL),
+            light(13, "Medical", "#eef7f6", "#098b86", Decoration.HEART),
+            dark(14, "Blueprint", "#12376a", "#80d8ff", Decoration.BLUEPRINT),
+            light(15, "History", "#f3ead9", "#8f603b", Decoration.MAP),
+            dark(16, "Science", "#0d2538", "#59e2d0", Decoration.MOLECULE),
+            light(17, "Education", "#f4f0ff", "#7152c7", Decoration.EDUCATION),
+            dark(18, "Finance", "#122724", "#b5d46e", Decoration.FINANCE),
+            light(19, "Nature", "#eaf1e4", "#4e7d42", Decoration.LEAF),
+            light(20, "Editorial", "#f6f2ed", "#be553b", Decoration.BOOKS),
+            dark(21, "Indigo", "#1c2151", "#a3a9ff", Decoration.TECH),
+            dark(22, "Copper", "#2d201d", "#e0a879", Decoration.COMPASS),
+            light(23, "Lavender", "#f0eafb", "#8b64ba", Decoration.STARS),
+            dark(24, "Monochrome", "#17191d", "#f5f5f5", Decoration.QUOTE));
 
     public static SlideTheme resolve(String id, String topic) {
         if (id != null && !id.isBlank() && !"auto".equalsIgnoreCase(id.trim())) {
