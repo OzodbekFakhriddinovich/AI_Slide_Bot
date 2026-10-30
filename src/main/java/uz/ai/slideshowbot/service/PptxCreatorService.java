@@ -174,10 +174,11 @@ public class PptxCreatorService {
         };
         label(slide, label, M, 48, 700, theme.accent());
         rect(slide, M, 84, 72, 4, theme.accent());
-        int textWidth=referenceDesign || image!=null?510:W-2*M;
+        int textWidth=referenceDesign || image!=null?510:535;
         if(!referenceDesign) {
             frame(slide,26,24,W-52,455,tint(theme,.20),.8);
             rect(slide,W-M-7,52,7,59,theme.accent());
+            if (image == null) scene(slide,theme,625,137,280,250);
         }
         int lastSpace=content.title().lastIndexOf(' ');
         if(content.title().length()<=46 && lastSpace>2) {

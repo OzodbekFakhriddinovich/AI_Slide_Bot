@@ -79,7 +79,10 @@ public class SlideFlowSingleService {
             } catch (RejectedExecutionException e) {
                 orders.refund(order.getId());
                 if (waiting != null) removeProgress(bot, chatId, waiting.getMessageId());
-                send(bot, chatId, "Bot yangilanmoqda. Mablag' to'liq qaytarildi. Birozdan so'ng qayta urinib ko'ring.");
+                send(bot, chatId, localized(language,
+                        "Bot yangilanmoqda. Mablag' to'liq qaytarildi. Birozdan so'ng qayta urinib ko'ring.",
+                        "Бот обновляется. Средства полностью возвращены. Попробуйте позже.",
+                        "The bot is restarting. Your payment was fully refunded; please try again shortly."));
                 return;
             }
             try {
@@ -87,7 +90,10 @@ public class SlideFlowSingleService {
             } catch (RejectedExecutionException e) {
                 orders.refund(order.getId());
                 progress.close();
-                send(bot, chatId, "Navbat band. Mablag' qaytarildi. Birozdan so'ng qayta urinib ko'ring.");
+                send(bot, chatId, localized(language,
+                        "Navbat band. Mablag' qaytarildi. Birozdan so'ng qayta urinib ko'ring.",
+                        "Очередь занята. Средства возвращены. Попробуйте позже.",
+                        "The queue is full. Your payment was refunded; please try again shortly."));
             }
         } catch (SlideOrderService.InsufficientBalanceException e) {
             SendMessage insufficient = insufficientBalanceMessage(chatId, language, e.balance(), e.required());

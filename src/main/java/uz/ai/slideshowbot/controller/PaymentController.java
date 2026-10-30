@@ -16,7 +16,7 @@ import java.util.Optional;
 /**
  * Python userbot (HUMOcardbot kuzatuvchi) shu endpointga POST yuboradi.
  * POST /api/payment/notify
- * Body: { "secret": "SUPER_SECRET_HUMO_TOKEN_123", "amount": 6010 }
+ * Body: { "secret": "<configured>", "amount": 6010 }
  */
 @RestController
 @RequestMapping("/api/payment")

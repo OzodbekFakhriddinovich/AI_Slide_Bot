@@ -165,7 +165,7 @@
         <aside class="preview-column" aria-label="Buyurtma tafsilotlari">
           <div class="preview-visual">
             <div class="preview-label"><span><span class="live-dot"></span><span id="previewLabel">Birinchi sahifa</span></span><span>16 : 9</span></div>
-            <div class="deck-preview" id="deckPreview"><img id="deckPreviewImage" src="theme-previews/1.jpg" alt="Cyber Navy — birinchi slayd namunasi" width="960" height="540"></div>
+            <div class="deck-preview" id="deckPreview"><img id="deckPreviewImage" src="theme-previews/uz/1.jpg" alt="Cyber Navy — birinchi slayd namunasi" width="960" height="540"></div>
             <p class="preview-theme-name" id="previewTheme">Cyber Navy · mavzuga mos</p><p class="preview-disclaimer" id="previewDisclaimer">Mavzu va muallif ismi namunada ko‘rsatilgan.</p>
           </div>
           <div class="order-box">
@@ -215,7 +215,7 @@
       {id:'24',name:'Monochrome',group:'minimal',tags:'qora oq minimal rasmiy',bg:'#17191d',accent:'#f5f5f5',fg:'#f2f4f5'}
     ];
     const filters = ['all','tech','education','business','science','nature','creative','minimal'].map(id => ({id}));
-    const languages = {UZ:'O‘zbekcha',ENG:'English',RU:'Русский',ES:'Español',DE:'Deutsch',TOJ:'Тоҷикӣ',TUR:'Türkçe'};
+    const languages = {UZ:'O‘zbekcha',RU:'Русский',ENG:'English'};
     const uiParam = new URLSearchParams(window.location.search).get('ui');
     const uiLocale = uiParam === 'RU' || uiParam === 'ENG' ? uiParam : 'UZ';
     const uiCopy = {
@@ -285,17 +285,18 @@
       return themes.find(theme => theme.id === String(match ? match[0] : 1));
     }
     function selectedTheme() { return state.template === 'auto' ? recommendedTheme() : themes.find(theme => theme.id === state.template) || themes[0]; }
+    function previewSrc(theme) { return 'theme-previews/'+uiLocale.toLowerCase()+'/'+theme.id+'.jpg'; }
     function palette(theme) { return '--theme-bg:'+theme.bg+';--theme-accent:'+theme.accent+';--theme-fg:'+theme.fg; }
     function renderThemes() {
       const query = normalized($('themeSearch').value.trim());
       const visible = themes.filter(theme => (state.filter === 'all' || theme.group === state.filter) && normalized(theme.name+' '+theme.tags+' '+themeName(theme)).includes(query));
-      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+themeName(theme)+' — '+copy().selected+'" aria-pressed="'+(state.template === theme.id)+'"><span class="mini-slide-frame" style="'+palette(theme)+'"><img class="mini-slide" src="theme-previews/'+theme.id+'.jpg" alt="'+themeName(theme)+' — '+copy().firstPage+'" width="960" height="540" loading="lazy" decoding="async"></span><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+themeName(theme)+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
+      $('themeGrid').innerHTML = visible.map(theme => '<button type="button" class="theme-card" data-theme="'+theme.id+'" aria-label="'+themeName(theme)+' — '+copy().selected+'" aria-pressed="'+(state.template === theme.id)+'"><span class="mini-slide-frame" style="'+palette(theme)+'"><img class="mini-slide" src="'+previewSrc(theme)+'" alt="'+themeName(theme)+' — '+copy().firstPage+'" width="960" height="540" loading="lazy" decoding="async"></span><span class="selection-mark" aria-hidden="true">✓</span><span class="theme-caption">'+themeName(theme)+'<span class="theme-index">'+theme.id.padStart(2,'0')+'</span></span></button>').join('');
       $('emptyThemes').hidden = visible.length > 0;
     }
     function updatePreview() {
       const theme = selectedTheme();
       $('deckPreview').setAttribute('style',palette(theme));
-      $('deckPreviewImage').src = 'theme-previews/'+theme.id+'.jpg';
+      $('deckPreviewImage').src = previewSrc(theme);
       $('deckPreviewImage').alt = themeName(theme)+' — '+copy().firstPage;
       $('previewTheme').textContent = themeName(theme) + (state.template === 'auto' ? ' · '+(uiLocale==='RU'?'по теме':uiLocale==='ENG'?'topic match':'mavzuga mos') : '');
       $('summaryTheme').textContent = state.template === 'auto' ? (uiLocale==='RU'?'По теме':uiLocale==='ENG'?'Topic match':'Mavzuga mos') : themeName(theme);

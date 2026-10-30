@@ -1,8 +1,13 @@
 package uz.ai.slideshowbot.service;
 
+import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import uz.ai.slideshowbot.bot.SlideBot;
 import uz.ai.slideshowbot.entity.UserEntity;
 import uz.ai.slideshowbot.enums.UserState;
@@ -10,6 +15,15 @@ import uz.ai.slideshowbot.repository.UserRepository;
 
 @Service
 public class ReferatService {
+
+    private final ThreadPoolExecutor generationWorkers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(8), task -> {
+                Thread thread = new Thread(task, "referat-generation-worker");
+                thread.setDaemon(true);
+                return thread;
+            }, new ThreadPoolExecutor.AbortPolicy());
+
+    @PreDestroy public void shutdownGenerationWorkers() { generationWorkers.shutdown(); }
 
     @Autowired private UserRepository userRepository;
     @Autowired private ReferatDocxService referatDocxService;
@@ -186,7 +200,20 @@ public class ReferatService {
         Integer progressMsgId = rawSender.sendSimpleMessage(bot, chatId.toString(),
                 progressLabel + "\n" + bar(0));
 
-        new Thread(() -> doCreate(bot, chatId, lang, mavzu, ism, sahifa, progressMsgId)).start();
+        try {
+            generationWorkers.execute(() -> doCreate(bot, chatId, lang, mavzu, ism, sahifa, progressMsgId));
+        } catch (RejectedExecutionException e) {
+            userRepository.findByChatId(chatId).ifPresent(saved -> {
+                saved.setBalance((saved.getBalance() == null ? 0 : saved.getBalance()) + PRICE);
+                userRepository.save(saved);
+            });
+            if (progressMsgId != null) rawSender.deleteMessageById(bot, chatId.toString(), progressMsgId);
+            rawSender.sendSimpleMessage(bot, chatId.toString(), switch (lang) {
+                case "RU" -> "Сейчас много запросов на создание рефератов. Деньги возвращены на баланс, попробуйте позже.";
+                case "ENG" -> "Essay generation is busy right now. Your payment was refunded; please try again shortly.";
+                default -> "Hozir referat yaratish navbati band. Mablag' balansingizga qaytarildi, keyinroq urinib ko'ring.";
+            });
+        }
     }
 
     private void doCreate(SlideBot bot, Long chatId, String lang,
@@ -245,12 +272,12 @@ public class ReferatService {
                 default    -> "⏳ Referat tayyorlanmoqda...";
             };
 
-            for (int i = 1; i <= STEPS; i++) {
-                if (Thread.currentThread().isInterrupted()) break;
-
-                int pct = Math.min(95, (i * 100) / STEPS);
-                String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                        + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+            int step = 0;
+            while (!Thread.currentThread().isInterrupted()) {
+                step++;
+                int filled = Math.min(19, step * 20 / STEPS);
+                int pct = Math.min(95, step * 100 / STEPS);
+                String bar = "█".repeat(filled) + "░".repeat(20 - filled);
 
                 try {
                     rawSender.editMessageText(bot, chatId.toString(), msgId,

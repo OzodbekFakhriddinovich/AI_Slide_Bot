@@ -86,6 +86,10 @@ public class ReferatDocxService {
         };
     }
 
+    private String localized(String lang, String uz, String ru, String en) {
+        return switch (lang) { case "RU" -> ru; case "ENG" -> en; default -> uz; };
+    }
+
     public byte[] generate(String mavzu, String ism, int sahifa, String lang) throws Exception {
         int bobCount = SAHIFA_BOB.getOrDefault(sahifa, 3);
         String[][] bobNames = buildBobNames(bobCount, lang);
@@ -99,16 +103,20 @@ public class ReferatDocxService {
             case "ENG" -> "Write ALL text in ENGLISH language.";
             default    -> "Write ALL text in UZBEK language (Latin script, not Cyrillic).";
         };
+        String subsectionHint = localized(lang,
+                "Mavzuga mos kichik bo'lim nomi", "Подходящее название подраздела", "A topic-specific subsection title");
+        String lengthHint = localized(lang,
+                "Kamida 400 so'z, 3 ta katta xatboshi", "Не менее 400 слов, 3 больших абзаца", "At least 400 words in 3 substantial paragraphs");
 
         StringBuilder bobStructure = new StringBuilder();
         for (int i = 0; i < bobCount; i++) {
             bobStructure.append("# ").append(bobNames[i][1]).append("\n\n");
-            bobStructure.append("## ").append(i + 1).append(".1. <Mavzuga mos kichik bolim nomi>\n");
-            bobStructure.append("<Kamida 400 soz, 3 ta katta xatboshi>\n\n");
-            bobStructure.append("## ").append(i + 1).append(".2. <Mavzuga mos kichik bolim nomi>\n");
-            bobStructure.append("<Kamida 400 soz, 3 ta katta xatboshi>\n\n");
-            bobStructure.append("## ").append(i + 1).append(".3. <Mavzuga mos kichik bolim nomi>\n");
-            bobStructure.append("<Kamida 400 soz, 3 ta katta xatboshi>\n\n");
+            bobStructure.append("## ").append(i + 1).append(".1. <").append(subsectionHint).append(">\n");
+            bobStructure.append("<").append(lengthHint).append(">\n\n");
+            bobStructure.append("## ").append(i + 1).append(".2. <").append(subsectionHint).append(">\n");
+            bobStructure.append("<").append(lengthHint).append(">\n\n");
+            bobStructure.append("## ").append(i + 1).append(".3. <").append(subsectionHint).append(">\n");
+            bobStructure.append("<").append(lengthHint).append(">\n\n");
         }
 
         String prompt = String.format("""
@@ -147,21 +155,19 @@ MUHIM:
 """, mavzu, langNote, bobCount, bobStructure.toString());
 
         String responseJson = gptService.callGemini(prompt, false);
-        JsonNode root = mapper.readTree(responseJson);
-        String raw = root.path("candidates").get(0)
-                .path("content").path("parts").get(0).path("text").asText().trim();
+        String raw = gptService.extractGeneratedText(responseJson);
 
         raw = raw.replaceAll("(?s)<thinking>.*?</thinking>", "").trim();
         raw = raw.replaceAll("(?s)```(markdown)?\\s*", "").replaceAll("```", "").trim();
 
-        Map<String, Object> result = parseMarkdownContent(raw, bobCount, bobNames, mavzu);
+        Map<String, Object> result = parseMarkdownContent(raw, bobCount, bobNames, mavzu, lang);
         System.out.println("✅ Referat kontenti muvaffaqiyatli parse qilindi! Chapters: " +
                 ((result.get("chapters") instanceof List<?> l) ? l.size() : 0));
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> parseMarkdownContent(String raw, int bobCount, String[][] bobNames, String mavzu) {
+    private Map<String, Object> parseMarkdownContent(String raw, int bobCount, String[][] bobNames, String mavzu, String lang) {
         Map<String, Object> data = new HashMap<>();
         List<Map<String, Object>> chapters = new ArrayList<>();
         List<String> references = new ArrayList<>();
@@ -235,17 +241,22 @@ MUHIM:
         flush.run();
 
         if (!data.containsKey("introduction") || data.get("introduction").toString().isBlank()) {
-            data.put("introduction", "Ushbu referatda " + mavzu + " mavzusi nazariy va amaliy jihatdan chuqur tadqiq qilingan.");
+            data.put("introduction", localized(lang,
+                    "Ushbu referatda " + mavzu + " mavzusi nazariy va amaliy jihatdan tahlil qilinadi.",
+                    "В реферате теоретически и практически рассматривается тема «" + mavzu + "».",
+                    "This paper examines the topic of " + mavzu + " from theoretical and practical perspectives."));
         }
         if (!data.containsKey("conclusion") || data.get("conclusion").toString().isBlank()) {
-            data.put("conclusion", "Xulosa qilib aytganda, " + mavzu + " mavzusida olib borilgan ilmiy izlanishlar o'z dolzarbligini isbotladi.");
+            data.put("conclusion", localized(lang,
+                    "Xulosa qilib aytganda, " + mavzu + " mavzusi bo'yicha tahlil yuqoridagi asosiy fikrlarni jamlaydi.",
+                    "Таким образом, проведённый анализ темы «" + mavzu + "» объединяет основные выводы работы.",
+                    "In conclusion, the analysis of " + mavzu + " brings together the paper's main findings."));
         }
         if (references.isEmpty()) {
-            references.addAll(List.of(
-                    "1. O'zbekiston Respublikasi qonun hujjatlari va ilmiy tadqiqotlar to'plami. - Toshkent: Adolat, 2023.",
-                    "2. Yo'ldoshev Q., Qodirov M. Zamonaviy ilmiy tadqiqot metodologiyasi. - Toshkent: Universitet, 2021. - 320 b.",
-                    "3. Rahmatullayev Sh. Fundamental fan asoslari va zamonaviy tahlillar. - Toshkent: Fan, 2022. - 280 b."
-            ));
+            references.add(localized(lang,
+                    "Manbalar ro'yxati model javobida berilmadi.",
+                    "Список источников отсутствовал в ответе модели.",
+                    "The model response did not include a reference list."));
         }
 
         while (chapters.size() < bobCount) {
@@ -255,8 +266,12 @@ MUHIM:
             List<Map<String, Object>> subs = new ArrayList<>();
             for (int j = 1; j <= 3; j++) {
                 Map<String, Object> sub = new HashMap<>();
-                sub.put("title", (idx + 1) + "." + j + ". " + mavzu + " bo'yicha tahlillar");
-                sub.put("text", mavzu + " bo'limida ilmiy izlanishlar va amaliy tavsiyalar keltirildi.");
+                sub.put("title", (idx + 1) + "." + j + ". " + localized(lang,
+                        mavzu + " bo'yicha tahlil", "Анализ темы «" + mavzu + "»", "Analysis of " + mavzu));
+                sub.put("text", localized(lang,
+                        mavzu + " bo'limi bo'yicha ushbu qismda manbalar asosida tahlil beriladi.",
+                        "В этом подразделе приводится анализ темы «" + mavzu + "» на основе источников.",
+                        "This subsection analyzes " + mavzu + " using the cited source material."));
                 subs.add(sub);
             }
             ch.put("subsections", subs);

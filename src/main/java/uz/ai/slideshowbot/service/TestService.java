@@ -2,6 +2,7 @@ package uz.ai.slideshowbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
@@ -18,6 +19,10 @@ import uz.ai.slideshowbot.repository.UserRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ✅ TestService — Test tayyorlash bo'limining to'liq logikasi.
@@ -26,6 +31,15 @@ import java.math.BigInteger;
  */
 @Service
 public class TestService {
+
+    private final ThreadPoolExecutor generationWorkers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(8), task -> {
+                Thread thread = new Thread(task, "test-generation-worker");
+                thread.setDaemon(true);
+                return thread;
+            }, new ThreadPoolExecutor.AbortPolicy());
+
+    @PreDestroy public void shutdownGenerationWorkers() { generationWorkers.shutdown(); }
 
     @Autowired
     private GptTextGeneratorService gptTextGeneratorService;   // Gemini orqali test generatsiya
@@ -338,7 +352,20 @@ public class TestService {
 
         final Integer finalProgressMsgId = progressMsgId;
         final UserEntity finalUser = user;
-        new Thread(() -> createAndSendTest(bot, finalUser, chatId, finalProgressMsgId)).start();
+        try {
+            generationWorkers.execute(() -> createAndSendTest(bot, finalUser, chatId, finalProgressMsgId));
+        } catch (RejectedExecutionException e) {
+            userRepository.findByChatId(chatId).ifPresent(saved -> {
+                saved.setBalance((saved.getBalance() == null ? 0 : saved.getBalance()) + TEST_PRICE);
+                userRepository.save(saved);
+            });
+            if (progressMsgId != null) rawSender.deleteMessageById(bot, chatId.toString(), progressMsgId);
+            rawSender.sendSimpleMessage(bot, chatId.toString(), switch (lang) {
+                case "RU" -> "Сейчас много запросов на создание тестов. Деньги возвращены на баланс, попробуйте позже.";
+                case "ENG" -> "Test generation is busy right now. Your payment was refunded; please try again shortly.";
+                default -> "Hozir test yaratish navbati band. Mablag' balansingizga qaytarildi, keyinroq urinib ko'ring.";
+            });
+        }
     }
 
     private void createAndSendTest(SlideBot bot, UserEntity user, Long chatId, Integer progressMsgId) {
@@ -346,9 +373,10 @@ public class TestService {
         String topic = user.getTestTopic();
         int count = (user.getTestQuestionCount() != null) ? user.getTestQuestionCount() : 10;
         String difficulty = (user.getTestDifficulty() != null) ? user.getTestDifficulty() : "MIXED";
+        Thread progressThread = null;
 
         try {
-            Thread progressThread = startProgressUpdater(bot, chatId, progressMsgId, lang);
+            progressThread = startProgressUpdater(bot, chatId, progressMsgId, lang);
 
             String testContent = generateTestContent(topic, count, difficulty, lang);
 
@@ -390,6 +418,7 @@ public class TestService {
 
         } catch (Exception e) {
             e.printStackTrace();
+            if (progressThread != null) progressThread.interrupt();
 
             userRepository.findByChatId(chatId).ifPresent(u -> {
                 u.setBalance((u.getBalance() != null ? u.getBalance() : 0) + TEST_PRICE);
@@ -445,56 +474,144 @@ public class TestService {
             default    -> "Mavzu";
         };
 
-        String correctLabel = switch (lang) {
-            case "RU"  -> "TO'G'RI JAVOB";
-            case "ENG" -> "CORRECT ANSWERS";
-            default    -> "TO'G'RI JAVOB";
+        String difficultyLabel = switch (lang) {
+            case "RU" -> "Сложность";
+            case "ENG" -> "Difficulty";
+            default -> "Qiyinlik";
+        };
+        String languageLabel = switch (lang) {
+            case "RU" -> "Язык";
+            case "ENG" -> "Language";
+            default -> "Til";
         };
 
-        String prompt = """
-                Siz test generatori siz. Quyidagi talabga ko'ra aniq %d ta test savoli yarating.
-                
+        String correctLabel = switch (lang) {
+            case "RU"  -> "ПРАВИЛЬНЫЕ ОТВЕТЫ";
+            case "ENG" -> "CORRECT ANSWERS";
+            default    -> "TO'G'RI JAVOBLAR";
+        };
+
+        String prompt = switch (lang) {
+            case "RU" -> """
+                Вы — генератор тестов. Создайте ровно %d вопросов по указанной теме.
+
                 %s: %s
-                Qiyinlik: %s
-                Til: %s
-                
+                %s: %s
+                %s: %s
+
+                ПРАВИЛА ФОРМАТА:
+                - Для каждого вопроса укажите четыре варианта (A, B, C, D).
+                - Правильный ответ должен быть только один.
+                - Разделяйте вопросы пустой строкой.
+                - Не добавляйте вступление, пояснения или заключение.
+
+                ФОРМАТ:
+                1. Текст вопроса?
+                A) вариант
+                B) вариант
+                C) вариант
+                D) вариант
+
+                ...все %d вопросов...
+
+                --- %s ---
+                1. A
+                2. B
+                ...до %d
+
+                Верните только тест в указанном формате.
+                """.formatted(count, topicLabel, topic, difficultyLabel, difficultyDesc,
+                    languageLabel, langInstruction, count, correctLabel, count);
+            case "ENG" -> """
+                You are a test generator. Create exactly %d questions on the requested topic.
+
+                %s: %s
+                %s: %s
+                %s: %s
+
+                FORMAT RULES:
+                - Give four options (A, B, C, D) for every question.
+                - There must be exactly one correct answer.
+                - Separate questions with a blank line.
+                - Do not add an introduction, explanations, or a conclusion.
+
+                FORMAT:
+                1. Question text?
+                A) option
+                B) option
+                C) option
+                D) option
+
+                ...all %d questions...
+
+                --- %s ---
+                1. A
+                2. B
+                ...up to %d
+
+                Return only the test in the requested format.
+                """.formatted(count, topicLabel, topic, difficultyLabel, difficultyDesc,
+                    languageLabel, langInstruction, count, correctLabel, count);
+            default -> """
+                Siz test generatori siz. Quyidagi talabga ko'ra aniq %d ta test savoli yarating.
+
+                %s: %s
+                %s: %s
+                %s: %s
+
                 MUHIM FORMAT QOIDALARI (hech qachon o'zgartirmang):
                 - Har bir savol uchun 4 ta variant (A, B, C, D)
                 - To'g'ri javob faqat bitta bo'lishi shart
                 - Savollar bo'sh qator bilan ajratilsin
                 - Hech qanday izoh, kirish yoki xulosa yozmang — faqat savollar va javoblar
-                
+
                 ANIQ FORMAT:
                 1. Savol matni?
                 A) variant
                 B) variant
                 C) variant
                 D) variant
-                
+
                 2. Savol matni?
                 A) variant
                 B) variant
                 C) variant
                 D) variant
-                
+
                 ...barcha %d savol...
-                
+
                 --- %s ---
                 1. A
                 2. B
                 ...%d tagacha
-                
+
                 Faqat yuqoridagi formatda javob bering, boshqa hech narsa yozmang.
-                """.formatted(count, topicLabel, topic, difficultyDesc, langInstruction,
-                count, correctLabel, count);
+                """.formatted(count, topicLabel, topic, difficultyLabel, difficultyDesc,
+                    languageLabel, langInstruction, count, correctLabel, count);
+        };
 
         String responseJson = gptTextGeneratorService.callGemini(prompt, false);
 
-        JsonNode root = new ObjectMapper().readTree(responseJson);
-        String rawText = root.path("candidates").get(0)
-                .path("content").path("parts").get(0).path("text").asText();
-
+        String rawText = gptTextGeneratorService.extractGeneratedText(responseJson);
+        validateTestFormat(rawText, count);
         return rawText.trim();
+    }
+
+    private void validateTestFormat(String text, int expectedCount) {
+        java.util.regex.Matcher marker = java.util.regex.Pattern.compile(
+                "(?im)^\\s*-{2,}\\s*(?:TO['’`]?G['’`]?RI\\s+JAVOBLAR|CORRECT\\s+ANSWERS|ПРАВИЛЬНЫЕ\\s+ОТВЕТЫ)\\s*-{2,}\\s*$")
+                .matcher(text);
+        if (!marker.find()) throw new IllegalStateException("Generated test is missing its answer key.");
+        String questions = text.substring(0, marker.start());
+        String answers = text.substring(marker.end());
+        long questionCount = java.util.regex.Pattern.compile("(?m)^\\s*\\d+[.)]\\s+\\S.*$")
+                .matcher(questions).results().count();
+        long optionCount = java.util.regex.Pattern.compile("(?im)^\\s*[A-DА-Г][).]\\s*\\S.*$")
+                .matcher(questions).results().count();
+        long answerCount = java.util.regex.Pattern.compile("(?im)^\\s*\\d+[.)]\\s*[A-DА-Г]\\s*$")
+                .matcher(answers).results().count();
+        if (questionCount != expectedCount || optionCount != expectedCount * 4L || answerCount != expectedCount)
+            throw new IllegalStateException("Generated test is incomplete or has an invalid answer key.");
     }
 
     private byte[] createWordDocument(String topic, String testContent, String lang) throws Exception {
@@ -604,17 +721,17 @@ public class TestService {
             final int DELAY_MS = TOTAL_SECONDS * 1000 / STEPS;
 
             String label = switch (lang) {
-                case "RU"  -> "⏳ Test tayyorlanmoqda...";
+                case "RU"  -> "⏳ Тест готовится...";
                 case "ENG" -> "⏳ Creating test...";
                 default    -> "⏳ Test tayyorlanmoqda...";
             };
 
-            for (int i = 1; i <= STEPS; i++) {
-                if (Thread.currentThread().isInterrupted()) break;
-
-                int percent = (i * 100) / STEPS;
-                String bar = "█".repeat(Math.min(20, i * 20 / STEPS))
-                        + "░".repeat(20 - Math.min(20, i * 20 / STEPS));
+            int step = 0;
+            while (!Thread.currentThread().isInterrupted()) {
+                step++;
+                int filled = Math.min(19, step * 20 / STEPS);
+                int percent = Math.min(95, step * 100 / STEPS);
+                String bar = "█".repeat(filled) + "░".repeat(20 - filled);
 
                 try {
                     rawSender.editMessageText(bot, chatId.toString(), msgId,
@@ -626,9 +743,6 @@ public class TestService {
                 } catch (Exception ignored) {}
             }
 
-            try {
-                rawSender.deleteMessageById(bot, chatId.toString(), msgId);
-            } catch (Exception ignored) {}
         });
 
         t.setDaemon(true);

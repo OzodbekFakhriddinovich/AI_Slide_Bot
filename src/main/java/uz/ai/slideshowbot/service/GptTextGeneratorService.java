@@ -16,8 +16,11 @@ public class GptTextGeneratorService {
     @Value("${gemini.api.keys:}")
     private String apiKeysRaw;
 
+    @Value("${gemini.api.model:gemini-3.6-flash}")
+    private String model;
+
     private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=";
+            "https://generativelanguage.googleapis.com/v1beta/models/";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -27,8 +30,8 @@ public class GptTextGeneratorService {
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
-    private static final int MAX_ATTEMPTS = 3;
-    private static final long RETRY_DELAY_MS = 4000;
+    private static final int MAX_ATTEMPTS_PER_KEY = 2;
+    private static final long RETRY_DELAY_MS = 900;
 
     private List<String> getApiKeys() {
         if (apiKeysRaw == null || apiKeysRaw.isBlank()) return List.of();
@@ -40,58 +43,66 @@ public class GptTextGeneratorService {
 
     public String callGemini(String prompt, boolean isJson) throws Exception {
         List<String> keys = getApiKeys();
-        if (keys.isEmpty()) {
-            throw new RuntimeException("Gemini API key topilmadi! application.yml ni tekshiring.");
-        }
+        if (keys.isEmpty()) throw new IllegalStateException("Gemini API key is missing. Configure GEMINI_API_KEYS.");
 
-        String key = keys.get(0);
-        String url = GEMINI_URL + key;
-
+        Map<String, Object> generation = new HashMap<>();
+        generation.put("maxOutputTokens", 12288);
+        if (isJson) generation.put("response_mime_type", "application/json");
         Map<String, Object> reqMap = new HashMap<>();
         reqMap.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
-        if (isJson) {
-            reqMap.put("generationConfig", Map.of("response_mime_type", "application/json"));
-        }
+        reqMap.put("generationConfig", generation);
         String jsonReq = mapper.writeValueAsString(reqMap);
+        String endpoint = GEMINI_URL + model + ":generateContent?key=";
+        Exception lastFailure = null;
 
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            System.out.println("🔑 Gemini 3.5 Flash urinish " + attempt + "/" + MAX_ATTEMPTS);
-
-            try {
-                RequestBody body = RequestBody.create(jsonReq, MediaType.get("application/json"));
-                Request req = new Request.Builder().url(url).post(body).build();
-
-                try (Response response = client.newCall(req).execute()) {
-                    String rb = response.body() != null ? response.body().string() : "";
-                    int code = response.code();
-
-                    if (response.isSuccessful()) {
-                        System.out.println("✅ Gemini muvaffaqiyatli javob berdi!");
-                        return rb;
+        for (String key : keys) {
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS_PER_KEY; attempt++) {
+                try {
+                    RequestBody body = RequestBody.create(jsonReq, MediaType.get("application/json"));
+                    Request req = new Request.Builder().url(endpoint + key).post(body).build();
+                    try (Response response = client.newCall(req).execute()) {
+                        String responseBody = response.body() != null ? response.body().string() : "";
+                        if (response.isSuccessful()) return responseBody;
+                        int code = response.code();
+                        String detail = apiError(responseBody);
+                        lastFailure = new IllegalStateException("Gemini API returned HTTP " + code
+                                + (detail.isBlank() ? "" : ": " + detail));
+                        if (code != 429 && code < 500 && code != 408) break;
                     }
-
-                    if (code == 429) {
-                        System.err.println("🚫 Rate limit (429). " + attempt + " urinish...");
-                    } else if (code == 503 || code == 500) {
-                        System.err.println("⏳ Server xatosi (" + code + ")");
-                    } else {
-                        System.err.println("❌ HTTP " + code);
-                    }
-
-                    if (attempt < MAX_ATTEMPTS) {
-                        Thread.sleep(RETRY_DELAY_MS * attempt);
-                    }
+                } catch (Exception e) {
+                    lastFailure = e;
                 }
-            } catch (Exception e) {
-                System.err.println("❌ Attempt " + attempt + " xato: " + e.getMessage());
-                if (attempt == MAX_ATTEMPTS) throw e;
-                Thread.sleep(RETRY_DELAY_MS);
+                if (attempt < MAX_ATTEMPTS_PER_KEY) Thread.sleep(RETRY_DELAY_MS * attempt);
             }
         }
-
-        throw new RuntimeException("Gemini " + MAX_ATTEMPTS + " marta urinib ham javob bermadi.");
+        throw new IllegalStateException(lastFailure == null
+                ? "Gemini API request failed. Check GEMINI_API_KEYS and gemini.api.model."
+                : "Gemini API request failed: " + lastFailure.getMessage(), lastFailure);
     }
 
+    private String apiError(String body) {
+        try { return mapper.readTree(body).path("error").path("message").asText(""); }
+        catch (Exception ignored) { return ""; }
+    }
+
+    public String extractGeneratedText(String responseJson) throws Exception {
+        JsonNode root = mapper.readTree(responseJson);
+        JsonNode candidate = root.path("candidates").path(0);
+        if ("MAX_TOKENS".equals(candidate.path("finishReason").asText()))
+            throw new IllegalStateException("Gemini response reached its output limit; no incomplete document was delivered.");
+        JsonNode parts = candidate.path("content").path("parts");
+        if (!parts.isArray()) {
+            String detail = root.path("error").path("message").asText("");
+            throw new IllegalStateException(detail.isBlank()
+                    ? "Gemini returned no text candidate; the response may have been blocked or truncated."
+                    : "Gemini returned no text candidate: " + detail);
+        }
+        StringBuilder output = new StringBuilder();
+        for (JsonNode part : parts) if (part.hasNonNull("text")) output.append(part.path("text").asText());
+        String text = output.toString().trim();
+        if (text.isBlank()) throw new IllegalStateException("Gemini returned an empty response.");
+        return text;
+    }
     public List<Section> generateSections(String topic, int slideCount,
                                           String language, int tariff) {
         int sectionCount = slideCount <= 10 ? 3 : slideCount <= 15 ? 4 : 5;

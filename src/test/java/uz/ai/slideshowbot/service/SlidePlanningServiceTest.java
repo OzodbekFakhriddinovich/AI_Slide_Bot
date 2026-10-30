@@ -105,6 +105,33 @@ class SlidePlanningServiceTest {
         verify(translator).translate(anyList(),eq("en"),eq("ru"),anyLong());
     }
 
+    @Test void slideContentIsPreparedInUzbekRussianAndEnglishWithoutAiCalls() throws Exception {
+        FreeTranslationService translator = mock(FreeTranslationService.class);
+        when(translator.translate(anyList(), eq("en"), eq("uz"), anyLong())).thenAnswer(invocation -> {
+            List<String> values = invocation.getArgument(0);
+            return values.stream().map(value -> "O'zbekcha tahlil: " + value).toList();
+        });
+        when(translator.translate(anyList(), eq("en"), eq("ru"), anyLong())).thenAnswer(invocation -> {
+            List<String> values = invocation.getArgument(0);
+            return values.stream().map(this::cyrillicTestTranslation).toList();
+        });
+
+        for (String language : List.of("UZ", "RU", "ENG")) {
+            SlideDeck deck = new SlidePlanningService(research(List.of(document())), null, translator)
+                    .createDeck("Network security", 10, language, 5000);
+            assertEquals(13, deck.slides().size());
+            assertEquals(language, deck.language());
+            assertEquals(SlideDeck.Layout.COVER, deck.slides().get(0).layout());
+            assertEquals(SlideDeck.Layout.AGENDA, deck.slides().get(1).layout());
+            assertTrue(deck.slides().stream().skip(2).allMatch(slide -> !slide.sources().isEmpty()));
+            String content = deck.slides().stream().skip(2).flatMap(slide -> slide.bullets().stream())
+                    .reduce("", (all, fact) -> all + " " + fact);
+            if (language.equals("UZ")) assertTrue(content.contains("O'zbekcha tahlil:"));
+            if (language.equals("RU")) assertTrue(content.matches("(?s).*[А-Яа-я].*"));
+            if (language.equals("ENG")) assertTrue(content.matches("(?s).*[A-Za-z].*"));
+        }
+    }
+
     @Test void failedTranslationNeverDeliversForeignTextAsSelectedLanguage() throws Exception {
         FreeTranslationService translator=mock(FreeTranslationService.class);
         when(translator.translate(anyList(),anyString(),anyString(),anyLong())).thenThrow(new IOException("Unavailable"));
